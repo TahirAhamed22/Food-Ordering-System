@@ -31,6 +31,8 @@
             <div class="header-actions">
                 <button class="theme-toggle" id="themeToggle">🌙</button>
                 {% if logged_in %}
+                    <button class="notification-btn" id="notificationsBtn">🔔</button>
+                    <button class="settings-btn" id="settingsBtn">⚙️</button>
                     <span class="welcome-text">👤 {{ current_user.username }}</span>
                     <a href="{{ url_for('logout') }}" class="auth-btn">Secure Logout</a>
                 {% else %}
@@ -48,7 +50,7 @@
         <!-- Security Status -->
         <div class="security-status-card">
             <div class="security-header">
-                <h2>🛡️ Security Status</h2>
+                <h2>🛡️ Security Status - IST {{ now().strftime('%d %b %Y, %I:%M %p') }}</h2>
                 <div class="security-indicators">
                     <div class="security-item active" id="httpsIndicator">
                         <span class="indicator-icon">🔐</span>
@@ -242,21 +244,307 @@
                 <button class="save-btn" id="save-password-btn">💾 Encrypt & Store Securely</button>
             </div>
 
-            <!-- Enhanced Vault Controls -->
-            <div class="vault-controls">
-                <div class="enhanced-search-container">
-                    <div class="search-icon">🔍</div>
-                    <input type="text" class="enhanced-search" id="vault-search" placeholder="Search your encrypted passwords...">
+            <!-- PHASE 1: Notification System Modal -->
+    {% if logged_in %}
+    <div class="notification-modal" id="notificationModal">
+        <div class="notification-modal-content">
+            <div class="modal-header">
+                <h3>🔔 Security Alerts & Notifications</h3>
+                <button class="close-btn" id="closeNotifications">×</button>
+            </div>
+            <div class="notifications-list" id="notificationsList">
+                <div style="text-align: center; color: var(--text-secondary); padding: 2rem;">
+                    <div class="loading-secure">🔔</div>
+                    Loading security alerts...
                 </div>
-                <select class="enhanced-sort" id="vault-sort">
-                    <option value="updated_at">📅 Sort by Updated</option>
-                    <option value="created_at">🆕 Sort by Created</option>
-                    <option value="site">🌐 Sort by Site</option>
-                    <option value="username">👤 Sort by Username</option>
-                </select>
-                <button class="notification-toggle-btn" id="notificationToggle">
-                    🔔 Notifications
-                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PHASE 1: Settings Modal -->
+    <div class="settings-modal" id="settingsModal">
+        <div class="settings-modal-content">
+            <div class="modal-header">
+                <h3>⚙️ Security Settings</h3>
+                <button class="close-btn" id="closeSettings">×</button>
+            </div>
+            <div class="settings-content">
+                <div class="settings-section">
+                    <h4>🔔 Notification Preferences</h4>
+                    <div class="settings-option">
+                        <div class="option-info">
+                            <div class="option-label">Breach Alerts</div>
+                            <div class="option-description">Get notified when your passwords appear in data breaches</div>
+                        </div>
+                        <input type="checkbox" class="settings-toggle" id="breachAlertsToggle">
+                    </div>
+                    <div class="settings-option">
+                        <div class="option-info">
+                            <div class="option-label">Password Age Warnings</div>
+                            <div class="option-description">Reminders to update old passwords (90+ days)</div>
+                        </div>
+                        <input type="checkbox" class="settings-toggle" id="passwordAgeWarningsToggle">
+                    </div>
+                    <div class="settings-option">
+                        <div class="option-info">
+                            <div class="option-label">Suspicious Activity Alerts</div>
+                            <div class="option-description">Alerts for unusual login patterns or access attempts</div>
+                        </div>
+                        <input type="checkbox" class="settings-toggle" id="suspiciousActivityToggle">
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h4>📧 Contact Information (Optional)</h4>
+                    <div class="form-group">
+                        <label class="form-label">Email Address</label>
+                        <input type="email" class="settings-input" id="notificationEmail" placeholder="your.email@domain.com">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Phone Number</label>
+                        <input type="tel" class="settings-input" id="notificationPhone" placeholder="+91 98765 43210">
+                    </div>
+                </div>
+            </div>
+            <button class="save-settings-btn" id="saveSettingsBtn">💾 Save Settings</button>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Auth Modal -->
+    {% if not logged_in %}
+    <div class="auth-modal" id="authModal">
+        <div class="auth-card">
+            <button class="close-btn" id="closeModal">×</button>
+            <h2 class="auth-title" id="authTitle">🔐 VaultGuard Secure Access</h2>
+            <div class="security-auth-notice">
+                <span class="security-icon">🔐</span>
+                <span>HTTPS Protected • Secure Authentication</span>
+            </div>
+            <form class="auth-form" id="authForm" method="POST">
+                <input type="text" class="auth-input" id="authUsername" name="username" placeholder="Username (3+ characters)" required autocomplete="username">
+                <input type="password" class="auth-input" id="authPassword" name="password" placeholder="Master Password (12+ characters)" required autocomplete="current-password">
+                <div class="password-requirements">
+                    <small>Strong password required: 12+ chars, uppercase, lowercase, numbers, symbols</small>
+                </div>
+                <button type="submit" class="auth-submit" id="authSubmit">Secure Login</button>
+            </form>
+            <p class="auth-switch">
+                <span id="authSwitchText">Don't have an account?</span>
+                <a href="#" class="auth-link" id="authSwitchLink">Create Secure Account</a>
+            </p>
+            <div class="auth-security-info">
+                <h4>Security Features:</h4>
+                <ul>
+                    <li>HTTPS encryption for all data</li>
+                    <li>Account lockout after 3 failed attempts</li>
+                    <li>Session timeout for security (30 minutes)</li>
+                    <li>Zero-knowledge encryption</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    
+    <script>
+        // Enhanced security status checker with IST timezone
+        function checkSecurityStatus() {
+            const isHTTPS = location.protocol === 'https:';
+            const securityBadge = document.getElementById('securityBadge');
+            const httpsStatus = document.getElementById('httpsStatus');
+            const httpsIndicator = document.getElementById('httpsIndicator');
+            
+            if (securityBadge) {
+                if (isHTTPS) {
+                    securityBadge.innerHTML = '🔒 HTTPS Secured';
+                    securityBadge.style.background = 'linear-gradient(135deg, #2ed573, #17d97a)';
+                    securityBadge.style.color = 'white';
+                } else {
+                    securityBadge.innerHTML = '⚠️ HTTP (Not Secure)';
+                    securityBadge.style.background = 'linear-gradient(135deg, #ff4757, #ff3742)';
+                    securityBadge.style.color = 'white';
+                }
+            }
+
+            // Update HTTPS status alert
+            if (httpsStatus) {
+                if (!isHTTPS) {
+                    httpsStatus.innerHTML = `
+                        <div class="https-warning">
+                            🚨 <strong>Security Warning:</strong> You are using HTTP instead of HTTPS. 
+                            Your data may be vulnerable to interception. Please use HTTPS for maximum security.
+                        </div>
+                    `;
+                    httpsStatus.style.display = 'block';
+                } else {
+                    httpsStatus.innerHTML = `
+                        <div class="https-secure">
+                            🔒 <strong>Secure Connection:</strong> HTTPS encryption is active. 
+                            Your data is protected during transmission.
+                        </div>
+                    `;
+                    httpsStatus.style.display = 'block';
+                    // Hide after 3 seconds
+                    setTimeout(() => {
+                        httpsStatus.style.display = 'none';
+                    }, 3000);
+                }
+            }
+
+            // Update security indicator
+            if (httpsIndicator) {
+                if (!isHTTPS) {
+                    httpsIndicator.classList.remove('active');
+                    httpsIndicator.querySelector('.indicator-icon').textContent = '⚠️';
+                    httpsIndicator.style.borderColor = 'var(--accent-red)';
+                    httpsIndicator.style.background = 'rgba(255, 71, 87, 0.1)';
+                }
+            }
+        }
+
+        // Session timeout warning (Phase 1 enhancement)
+        let sessionWarningShown = false;
+        let sessionTimeout = 25 * 60 * 1000; // 25 minutes (5 min before 30 min timeout)
+
+        function showSessionWarning() {
+            if (!sessionWarningShown && document.body.classList.contains('logged-in')) {
+                sessionWarningShown = true;
+                if (typeof showNotification === 'function') {
+                    showNotification('Session expires in 5 minutes. Save your work!', 'warning');
+                } else {
+                    alert('Session expires in 5 minutes. Save your work!');
+                }
+            }
+        }
+
+        // IST Timezone display update
+        function updateISTTime() {
+            const now = new Date();
+            const istTime = now.toLocaleString('en-IN', {
+                timeZone: 'Asia/Kolkata',
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+            
+            const timeElements = document.querySelectorAll('.ist-time');
+            timeElements.forEach(el => {
+                el.textContent = istTime + ' IST';
+            });
+        }
+
+        // Phase 1 Enhanced Initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            checkSecurityStatus();
+            updateISTTime();
+            
+            // Update IST time every minute
+            setInterval(updateISTTime, 60000);
+            
+            // Security warning for HTTP
+            if (location.protocol !== 'https:') {
+                setTimeout(() => {
+                    if (typeof showNotification === 'function') {
+                        showNotification('⚠️ Security Warning: Use HTTPS for maximum protection', 'warning');
+                    }
+                }, 2000);
+            } else {
+                // Show HTTPS success notification
+                setTimeout(() => {
+                    if (typeof showNotification === 'function') {
+                        showNotification('🔒 Secure HTTPS connection established', 'success');
+                    }
+                }, 1000);
+            }
+
+            // Session timeout warning (only for logged in users)
+            if (document.body.classList.contains('logged-in')) {
+                setTimeout(showSessionWarning, sessionTimeout);
+                
+                // Show Phase 1 completion notification
+                setTimeout(() => {
+                    if (typeof showNotification === 'function') {
+                        showNotification('✅ Phase 1 Enhanced: Search, IST timezone, notifications active', 'info');
+                    }
+                }, 3000);
+            }
+
+            // Phase 1: Initialize notification badge update
+            if (typeof loadUserNotifications === 'function') {
+                loadUserNotifications();
+            }
+        });
+
+        // Enhanced clipboard security (Phase 1)
+        function secureClipboardClear() {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText('').catch(() => {
+                    // Fallback: try to clear with dummy text
+                    navigator.clipboard.writeText('clipboard_cleared_for_security_2025').catch(() => {});
+                });
+            }
+        }
+
+        // Clear clipboard on page unload
+        window.addEventListener('beforeunload', () => {
+            secureClipboardClear();
+        });
+
+        // Clear clipboard after 30 seconds of any copy operation
+        let clipboardTimeout;
+        document.addEventListener('copy', () => {
+            clearTimeout(clipboardTimeout);
+            clipboardTimeout = setTimeout(secureClipboardClear, 30000);
+        });
+
+        // Phase 1: Performance monitoring
+        window.addEventListener('load', () => {
+            const loadTime = performance.now();
+            console.log(`🛡️ VaultGuard Phase 1 loaded in ${loadTime.toFixed(2)}ms`);
+            
+            if (loadTime > 3000) {
+                console.warn('⚠️ Slow loading detected. Consider optimizing resources.');
+            }
+        });
+
+        // Phase 1: Enhanced error handling
+        window.addEventListener('error', (event) => {
+            console.error('🚨 Application Error:', event.error);
+            if (typeof showNotification === 'function') {
+                showNotification('⚠️ An error occurred. Please refresh if issues persist.', 'error');
+            }
+        });
+
+        // Phase 1: Unhandled promise rejection handling
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('🚨 Unhandled Promise Rejection:', event.reason);
+            if (typeof showNotification === 'function') {
+                showNotification('⚠️ Network or server error. Please try again.', 'error');
+            }
+            event.preventDefault();
+        });
+    </script>
+</body>
+</html>: Enhanced Vault Controls -->
+            <div class="vault-controls">
+                <div class="search-container">
+                    <div class="search-icon">🔍</div>
+                    <input type="text" class="search-input" id="vault-search" placeholder="Search your encrypted passwords...">
+                </div>
+                <div class="sort-container">
+                    <label class="sort-label">Sort by:</label>
+                    <select class="sort-select" id="vault-sort">
+                        <option value="updated_at">📅 Recently Updated</option>
+                        <option value="created_at">🆕 Recently Added</option>
+                        <option value="site">🌐 Site Name (A-Z)</option>
+                        <option value="username">👤 Username (A-Z)</option>
+                    </select>
+                </div>
             </div>
 
             <div class="vault-section">
@@ -372,208 +660,20 @@
             </div>
         </div>
 
-        <!-- Footer with Terms and Privacy Links -->
-        <div class="footer-links">
-            <a href="{{ url_for('terms') }}" target="_blank">Terms of Service</a>
-            <a href="{{ url_for('privacy') }}" target="_blank">Privacy Policy</a>
-            <a href="mailto:security@vaultguard.local">Security Contact</a>
-            <span style="color: var(--text-secondary); font-size: 0.8rem;">© 2025 VaultGuard Secure</span>
+        <!-- PHASE 1: Enhanced Footer -->
+        <div class="footer">
+            <div class="footer-content">
+                <div class="copyright-text">© 2025 VaultGuard Secure - Professional Password Security</div>
+                <div class="footer-links-enhanced">
+                    <a href="{{ url_for('terms') }}" class="footer-link" target="_blank">Terms of Service</a>
+                    <a href="{{ url_for('privacy') }}" class="footer-link" target="_blank">Privacy Policy</a>
+                    <a href="mailto:security@vaultguard.local" class="footer-link">Security Contact</a>
+                </div>
+                <div class="footer-badge">
+                    🇮🇳 <span>Configured for India Standard Time (IST)</span>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Notification Preferences Modal -->
-    {% if logged_in %}
-    <div class="notification-modal" id="notificationModal">
-        <div class="notification-modal-content">
-            <div class="modal-header">
-                <h3>🔔 Security Notification Preferences</h3>
-                <button class="close-btn" id="closeNotificationModal">×</button>
-            </div>
-            <div class="notification-preferences">
-                <div class="notification-option">
-                    <div class="notification-label">
-                        <h4>🚨 Breach Alerts</h4>
-                        <p>Get notified when your passwords appear in data breaches</p>
-                    </div>
-                    <input type="checkbox" class="checkbox" id="breachAlerts">
-                </div>
-                <div class="notification-option">
-                    <div class="notification-label">
-                        <h4>⏰ Password Age Warnings</h4>
-                        <p>Reminders to update old passwords (90+ days)</p>
-                    </div>
-                    <input type="checkbox" class="checkbox" id="ageWarnings">
-                </div>
-                <div class="notification-option">
-                    <div class="notification-label">
-                        <h4>🔍 Suspicious Activity</h4>
-                        <p>Alerts for unusual login patterns or access attempts</p>
-                    </div>
-                    <input type="checkbox" class="checkbox" id="suspiciousActivity">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">📧 Email (Optional)</label>
-                    <input type="email" class="form-input" id="notificationEmail" placeholder="your.email@domain.com">
-                </div>
-                <div class="form-group">
-                    <label class="form-label">📱 Phone (Optional)</label>
-                    <input type="tel" class="form-input" id="notificationPhone" placeholder="+1 (555) 123-4567">
-                </div>
-            </div>
-            <div class="modal-actions">
-                <button class="save-btn" id="saveNotificationPrefs">💾 Save Preferences</button>
-                <button class="close-modal-btn secondary" id="cancelNotificationPrefs">Cancel</button>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Auth Modal -->
-    {% if not logged_in %}
-    <div class="auth-modal" id="authModal">
-        <div class="auth-card">
-            <button class="close-btn" id="closeModal">×</button>
-            <h2 class="auth-title" id="authTitle">🔐 VaultGuard Secure Access</h2>
-            <div class="security-auth-notice">
-                <span class="security-icon">🔐</span>
-                <span>HTTPS Protected • Secure Authentication</span>
-            </div>
-            <form class="auth-form" id="authForm" method="POST">
-                <input type="text" class="auth-input" id="authUsername" name="username" placeholder="Username (3+ characters)" required autocomplete="username">
-                <input type="password" class="auth-input" id="authPassword" name="password" placeholder="Master Password (12+ characters)" required autocomplete="current-password">
-                <div class="password-requirements">
-                    <small>Strong password required: 12+ chars, uppercase, lowercase, numbers, symbols</small>
-                </div>
-                <button type="submit" class="auth-submit" id="authSubmit">Secure Login</button>
-            </form>
-            <p class="auth-switch">
-                <span id="authSwitchText">Don't have an account?</span>
-                <a href="#" class="auth-link" id="authSwitchLink">Create Secure Account</a>
-            </p>
-            <div class="auth-security-info">
-                <h4>Security Features:</h4>
-                <ul>
-                    <li>HTTPS encryption for all data</li>
-                    <li>Account lockout after 3 failed attempts</li>
-                    <li>Session timeout for security (30 minutes)</li>
-                    <li>Zero-knowledge encryption</li>
-                </ul>
-            </div>
-        </div>
-    </div>
-    {% endif %}
-
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-    
-    <script>
-        // Enhanced security status checker
-        function checkSecurityStatus() {
-            const isHTTPS = location.protocol === 'https:';
-            const securityBadge = document.getElementById('securityBadge');
-            const httpsStatus = document.getElementById('httpsStatus');
-            const httpsIndicator = document.getElementById('httpsIndicator');
-            
-            if (securityBadge) {
-                if (isHTTPS) {
-                    securityBadge.innerHTML = '🔒 HTTPS Secured';
-                    securityBadge.style.background = 'linear-gradient(135deg, #2ed573, #17d97a)';
-                    securityBadge.style.color = 'white';
-                } else {
-                    securityBadge.innerHTML = '⚠️ HTTP (Not Secure)';
-                    securityBadge.style.background = 'linear-gradient(135deg, #ff4757, #ff3742)';
-                    securityBadge.style.color = 'white';
-                }
-            }
-
-            // Update HTTPS status alert
-            if (httpsStatus) {
-                if (!isHTTPS) {
-                    httpsStatus.innerHTML = `
-                        <div class="https-warning">
-                            🚨 <strong>Security Warning:</strong> You are using HTTP instead of HTTPS. 
-                            Your data may be vulnerable to interception. Please use HTTPS for maximum security.
-                        </div>
-                    `;
-                    httpsStatus.style.display = 'block';
-                } else {
-                    httpsStatus.innerHTML = `
-                        <div class="https-secure">
-                            🔒 <strong>Secure Connection:</strong> HTTPS encryption is active. 
-                            Your data is protected during transmission.
-                        </div>
-                    `;
-                    httpsStatus.style.display = 'block';
-                    // Hide after 3 seconds
-                    setTimeout(() => {
-                        httpsStatus.style.display = 'none';
-                    }, 3000);
-                }
-            }
-
-            // Update security indicator
-            if (httpsIndicator) {
-                if (!isHTTPS) {
-                    httpsIndicator.classList.remove('active');
-                    httpsIndicator.querySelector('.indicator-icon').textContent = '⚠️';
-                    httpsIndicator.style.borderColor = 'var(--accent-red)';
-                    httpsIndicator.style.background = 'rgba(255, 71, 87, 0.1)';
-                }
-            }
-        }
-
-        // Session timeout warning
-        let sessionWarningShown = false;
-        let sessionTimeout = 25 * 60 * 1000; // 25 minutes (5 min before 30 min timeout)
-
-        function showSessionWarning() {
-            if (!sessionWarningShown && document.body.classList.contains('logged-in')) {
-                sessionWarningShown = true;
-                if (typeof showNotification === 'function') {
-                    showNotification('Session expires in 5 minutes. Save your work!', 'warning');
-                }
-            }
-        }
-
-        // Initialize security status and session management
-        document.addEventListener('DOMContentLoaded', () => {
-            checkSecurityStatus();
-            
-            // Security warning for HTTP
-            if (location.protocol !== 'https:') {
-                setTimeout(() => {
-                    if (typeof showNotification === 'function') {
-                        showNotification('Security Warning: Use HTTPS for maximum protection', 'warning');
-                    }
-                }, 2000);
-            }
-
-            // Session timeout warning (only for logged in users)
-            if (document.body.classList.contains('logged-in')) {
-                setTimeout(showSessionWarning, sessionTimeout);
-            }
-        });
-
-        // Enhanced clipboard security
-        function secureClipboardClear() {
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText('').catch(() => {
-                    // Fallback: try to clear with dummy text
-                    navigator.clipboard.writeText('clipboard_cleared_for_security').catch(() => {});
-                });
-            }
-        }
-
-        // Clear clipboard on page unload
-        window.addEventListener('beforeunload', () => {
-            secureClipboardClear();
-        });
-
-        // Clear clipboard after 30 seconds of any copy operation
-        let clipboardTimeout;
-        document.addEventListener('copy', () => {
-            clearTimeout(clipboardTimeout);
-            clipboardTimeout = setTimeout(secureClipboardClear, 30000);
-        });
-    </script>
-</body>
-</html>
+    <!-- PHASE 1
