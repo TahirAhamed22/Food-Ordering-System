@@ -68,22 +68,22 @@ def load_user(user_id):
         return None
 
 # --------------------------------------------------------
-# Enhanced Database Models with Notifications - PHASE 1
+# Enhanced Database Models with Notifications
 # --------------------------------------------------------
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(128), nullable=False)
     encryption_salt = db.Column(db.String(128), nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.UTC))
     last_login = db.Column(db.DateTime)
     failed_login_attempts = db.Column(db.Integer, default=0)
     account_locked_until = db.Column(db.DateTime)
     
-    # PHASE 1: Enhanced notification preferences
+    # Enhanced notification preferences
     notification_preferences = db.Column(db.JSON, default=lambda: {
-        'breach_alerts': True,
-        'password_age_warnings': True,
+        'breach_alerts': False,
+        'password_age_warnings': False,
         'suspicious_activity': False,
         'email': None,
         'phone': None
@@ -99,26 +99,18 @@ class User(db.Model, UserMixin):
         return bcrypt.check_password_hash(self.password_hash, password)
     
     def is_account_locked(self):
-        if self.account_locked_until:
-            # Convert to IST timezone
-            ist = pytz.timezone('Asia/Kolkata')
-            if self.account_locked_until.tzinfo is None:
-                self.account_locked_until = pytz.UTC.localize(self.account_locked_until)
-            now_ist = datetime.now(ist)
-            locked_until_ist = self.account_locked_until.astimezone(ist)
-            return locked_until_ist > now_ist
+        if self.account_locked_until and self.account_locked_until > datetime.now(pytz.UTC):
+            return True
         return False
     
     def lock_account(self, duration_minutes=60):
-        ist = pytz.timezone('Asia/Kolkata')
-        self.account_locked_until = datetime.now(ist) + timedelta(minutes=duration_minutes)
+        self.account_locked_until = datetime.now(pytz.UTC) + timedelta(minutes=duration_minutes)
         self.failed_login_attempts += 1
     
     def unlock_account(self):
         self.account_locked_until = None
         self.failed_login_attempts = 0
-        ist = pytz.timezone('Asia/Kolkata')
-        self.last_login = datetime.now(ist)
+        self.last_login = datetime.now(pytz.UTC)
 
     def get_encryption_key(self, master_password):
         salt = base64.b64decode(self.encryption_salt.encode())
@@ -154,33 +146,24 @@ class BreachAlert(db.Model):
     vault_entry_id = db.Column(db.Integer, db.ForeignKey('vault_entry.id'), nullable=True)
     alert_type = db.Column(db.String(50), nullable=False)  # 'breach', 'weak_password', 'old_password'
     message = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.timezone('Asia/Kolkata')))
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(pytz.UTC))
     acknowledged = db.Column(db.Boolean, default=False)
     severity = db.Column(db.String(20), default='medium')  # 'low', 'medium', 'high', 'critical'
 
 # --------------------------------------------------------
-# Enhanced Security Functions - FIXED IST TIMEZONE
+# Enhanced Security Functions
 # --------------------------------------------------------
 def get_user_timezone():
-    """Get user's timezone - IST for this application"""
+    """Get user's timezone - defaulting to Asia/Kolkata"""
     return pytz.timezone('Asia/Kolkata')
 
 def format_datetime_for_user(dt):
-    """Format datetime for IST timezone display"""
-    if dt is None:
-        return '-'
-    
-    ist = get_user_timezone()
-    
-    # Handle both timezone-aware and naive datetimes
+    """Format datetime for user's timezone"""
     if dt.tzinfo is None:
-        # If naive, assume it's already IST
-        dt_ist = ist.localize(dt)
-    else:
-        # If timezone-aware, convert to IST
-        dt_ist = dt.astimezone(ist)
-    
-    return dt_ist.strftime('%d %b %Y, %I:%M %p IST')
+        dt = pytz.UTC.localize(dt)
+    user_tz = get_user_timezone()
+    local_dt = dt.astimezone(user_tz)
+    return local_dt.strftime('%Y-%m-%d %H:%M:%S')
 
 def validate_username(username):
     if not username or len(username.strip()) < 3:
@@ -215,10 +198,9 @@ def sanitize_input(text):
 def encrypt_password(password, key):
     try:
         f = Fernet(key)
-        ist = pytz.timezone('Asia/Kolkata')
         data = json.dumps({
             'password': password,
-            'timestamp': datetime.now(ist).isoformat(),
+            'timestamp': datetime.now(pytz.UTC).isoformat(),
             'checksum': secrets.token_hex(16)
         })
         encrypted = f.encrypt(data.encode())
@@ -305,15 +287,12 @@ def logout():
     return redirect(url_for('home'))
 
 # --------------------------------------------------------
-# Enhanced API Routes - FIXED LOGIN ERROR
+# Enhanced API Routes
 # --------------------------------------------------------
 @app.route('/api/login', methods=["POST"])
 def api_login():
     try:
         data = request.get_json()
-        if not data:
-            return jsonify({'success': False, 'message': 'No data provided'}), 400
-            
         username = sanitize_input(data.get("username", ""))
         password = data.get("password", "")
         
@@ -340,7 +319,7 @@ def api_login():
             
             return jsonify({
                 'success': True, 
-                'message': 'Login successful!', 
+                'message': 'Secure login successful!', 
                 'salt': user.encryption_salt,
                 'username': user.username
             }), 200
@@ -353,15 +332,12 @@ def api_login():
             
     except Exception as e:
         logger.error(f"Login error: {str(e)}")
-        return jsonify({'success': False, 'message': 'Server error during login'}), 500
+        return jsonify({'success': False, 'message': 'Server error'}), 500
 
 @app.route('/api/register', methods=["POST"])
 def api_register():
     try:
         data = request.get_json()
-        if not data:
-            return jsonify({'success': False, 'message': 'No data provided'}), 400
-            
         username = sanitize_input(data.get("username", ""))
         password = data.get("password", "")
         
@@ -393,7 +369,7 @@ def api_register():
         
         return jsonify({
             'success': True, 
-            'message': 'Account created successfully!', 
+            'message': 'Secure account created!', 
             'salt': encryption_salt,
             'username': new_user.username
         }), 201
@@ -401,7 +377,7 @@ def api_register():
     except Exception as e:
         logger.error(f"Registration error: {str(e)}")
         db.session.rollback()
-        return jsonify({'success': False, 'message': 'Server error during registration'}), 500
+        return jsonify({'success': False, 'message': 'Server error'}), 500
 
 @app.route('/api/vault', methods=['GET', 'POST'])
 @login_required
@@ -435,15 +411,12 @@ def manage_vault():
                 site=site, username=username, user_id=current_user.id
             ).first()
             
-            ist = pytz.timezone('Asia/Kolkata')
-            now_ist = datetime.now(ist)
-            
             if existing_entry:
                 existing_entry.encrypted_password = encrypted_password
-                existing_entry.updated_at = now_ist
+                existing_entry.updated_at = datetime.now(pytz.timezone('Asia/Kolkata'))
                 existing_entry.password_strength_score = password_score
-                existing_entry.last_strength_check = now_ist
-                message = 'Password updated successfully!'
+                existing_entry.last_strength_check = datetime.now(pytz.UTC)
+                message = 'Password updated securely!'
             else:
                 new_entry = VaultEntry(
                     site=site,
@@ -451,12 +424,10 @@ def manage_vault():
                     encrypted_password=encrypted_password,
                     user_id=current_user.id,
                     password_strength_score=password_score,
-                    last_strength_check=now_ist,
-                    created_at=now_ist,
-                    updated_at=now_ist
+                    last_strength_check=datetime.now(pytz.UTC)
                 )
                 db.session.add(new_entry)
-                message = 'Password saved securely!'
+                message = 'Password encrypted and saved!'
 
             # Create alerts for weak passwords
             if password_score < 3:
@@ -489,7 +460,7 @@ def manage_vault():
     except Exception as e:
         logger.error(f"Vault error: {str(e)}")
         db.session.rollback()
-        return jsonify({'success': False, 'message': 'Vault operation failed'}), 500
+        return jsonify({'success': False, 'message': 'Server error'}), 500
 
 @app.route('/api/vault/<int:entry_id>/password', methods=['POST'])
 @login_required
@@ -515,7 +486,7 @@ def get_vault_password(entry_id):
         
     except Exception as e:
         logger.error(f"Password access error: {str(e)}")
-        return jsonify({'success': False, 'message': 'Failed to decrypt password'}), 500
+        return jsonify({'success': False, 'message': 'Decryption failed'}), 500
 
 @app.route('/api/vault/<int:entry_id>', methods=['DELETE'])
 @login_required
@@ -528,12 +499,12 @@ def delete_vault_entry(entry_id):
         db.session.delete(entry)
         db.session.commit()
         
-        return jsonify({'success': True, 'message': 'Password deleted successfully'}), 200
+        return jsonify({'success': True, 'message': 'Password securely deleted'}), 200
         
     except Exception as e:
         logger.error(f"Delete error: {str(e)}")
         db.session.rollback()
-        return jsonify({'success': False, 'message': 'Failed to delete password'}), 500
+        return jsonify({'success': False, 'message': 'Server error'}), 500
 
 @app.route('/api/check_password', methods=['POST'])
 def check_password_strength():
@@ -650,7 +621,7 @@ def check_password_strength():
         
     except Exception as e:
         logger.error(f"Password analysis error: {str(e)}")
-        return jsonify({'success': False, 'message': 'Password analysis failed'}), 500
+        return jsonify({'success': False, 'message': 'Analysis failed'}), 500
 
 @app.route('/api/me', methods=['GET'])
 def get_user_info():
@@ -688,9 +659,6 @@ def get_user_info():
         logger.error(f"User info error: {str(e)}")
         return jsonify({'success': False, 'message': 'Failed to get user info'}), 500
 
-# --------------------------------------------------------
-# PHASE 1: NOTIFICATION SYSTEM ENDPOINTS - FIXED
-# --------------------------------------------------------
 @app.route('/api/notifications/preferences', methods=['GET', 'POST'])
 @login_required
 def manage_notification_preferences():
@@ -713,7 +681,7 @@ def manage_notification_preferences():
             elif not email:
                 prefs['email'] = None
                 
-            if phone and re.match(r'^[\d\-\+\(\)\s]+, phone):
+            if phone and re.match(r'^[\d\-\+\(\)\s]+$', phone):
                 prefs['phone'] = phone
             elif not phone:
                 prefs['phone'] = None
@@ -757,33 +725,6 @@ def acknowledge_alert(alert_id):
         logger.error(f"Alert acknowledgment error: {str(e)}")
         return jsonify({'success': False, 'message': 'Failed to acknowledge alert'}), 500
 
-@app.route('/api/alerts', methods=['GET'])
-@login_required
-def get_user_alerts():
-    try:
-        # Get unacknowledged alerts
-        alerts = BreachAlert.query.filter_by(
-            user_id=current_user.id, 
-            acknowledged=False
-        ).order_by(BreachAlert.created_at.desc()).all()
-        
-        alert_data = [{
-            'id': alert.id,
-            'type': alert.alert_type,
-            'message': alert.message,
-            'severity': alert.severity,
-            'created_at': format_datetime_for_user(alert.created_at)
-        } for alert in alerts]
-        
-        return jsonify({
-            'success': True,
-            'alerts': alert_data
-        })
-        
-    except Exception as e:
-        logger.error(f"Get alerts error: {str(e)}")
-        return jsonify({'success': False, 'message': 'Failed to get alerts'}), 500
-
 # --------------------------------------------------------
 # SSL Certificate Generation Function
 # --------------------------------------------------------
@@ -804,10 +745,10 @@ def create_ssl_certificate():
 
         # Create certificate subject
         subject = issuer = x509.Name([
-            x509.NameAttribute(NameOID.COUNTRY_NAME, "IN"),
-            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Karnataka"),
-            x509.NameAttribute(NameOID.LOCALITY_NAME, "Bengaluru"),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "VaultGuard Secure"),
+            x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
+            x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "Local"),
+            x509.NameAttribute(NameOID.LOCALITY_NAME, "Development"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "VaultGuard"),
             x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
         ])
 
@@ -868,10 +809,10 @@ if __name__ == '__main__':
         db.create_all()
         logger.info("Database initialized successfully")
         
-    print("=" * 70)
-    print("🛡️ VAULTGUARD SECURE - PHASE 1 ENHANCED - 2025")
-    print("Professional Password Security with IST Timezone")
-    print("=" * 70)
+    print("=" * 60)
+    print("VAULTGUARD SECURE - PHASE 1 ENHANCED")
+    print("Enhanced security features enabled")
+    print("=" * 60)
     
     # SSL certificate handling
     ssl_context = None
@@ -880,40 +821,35 @@ if __name__ == '__main__':
     if not cert_exists:
         print("SSL certificates not found. Generating new certificates...")
         if create_ssl_certificate():
-            print("✅ SSL certificates created successfully!")
+            print("SSL certificates created successfully!")
             cert_exists = True
         else:
-            print("❌ Could not create SSL certificates. Running without HTTPS.")
+            print("Could not create SSL certificates. Running without HTTPS.")
     
     if cert_exists:
         ssl_context = ('cert.pem', 'key.pem')
-        print("🔒 HTTPS ENABLED with SSL certificates")
-        print("\n🌐 Secure Access URLs:")
+        print("HTTPS enabled with SSL certificates")
+        print("\nSecure access URLs:")
         print("• Primary: https://127.0.0.1:5000")
         print("• Alternative: https://localhost:5000")
-        print("\n⚠️ BROWSER SECURITY WARNING:")
-        print("Your browser will show a security warning for self-signed certificates.")
-        print("This is normal. To proceed:")
+        print("\nIMPORTANT: Your browser will show a security warning")
+        print("This is normal for self-signed certificates. To proceed:")
         print("1. Click 'Advanced' (Chrome/Edge) or 'Advanced...' (Firefox)")
-        print("2. Click 'Proceed to 127.0.0.1 (unsafe)' or similar")
-        print("3. Your connection will be encrypted with HTTPS")
+        print("2. Click 'Proceed to 127.0.0.1 (unsafe)' or similar option")
+        print("3. The warning appears because the certificate is self-signed")
+        print("4. Your connection will still be encrypted with HTTPS")
     else:
-        print("⚠️ Running without HTTPS - Some security features limited")
-        print("🌐 Access: http://127.0.0.1:5000")
+        print("Running without HTTPS - Some security features will be limited")
+        print("Access your app at: http://127.0.0.1:5000")
     
-    print("=" * 70)
-    print("✅ PHASE 1 FEATURES COMPLETED:")
-    print("🔍 Enhanced search/sort UI with real-time filtering")
-    print("⏰ Fixed IST timezone display (Asia/Kolkata)")
-    print("🔔 Complete notification system with breach alerts")
-    print("🎨 Improved light mode contrast for better readability")  
-    print("📅 Copyright updated to 2025")
-    print("🛡️ Enhanced breach monitoring integration")
-    print("🔧 Fixed login server error with proper endpoints")
-    print("=" * 70)
-    print("🇮🇳 Configured for India Standard Time (IST)")
-    print("📍 Location: Bengaluru, Karnataka, IN")
-    print("=" * 70)
+    print("=" * 60)
+    print("Phase 1 Features Added:")
+    print("✅ Enhanced search/sort UI")
+    print("✅ Timestamp corrections (IST timezone)")  
+    print("✅ Optional breach monitoring notifications")
+    print("✅ Better light mode contrast")
+    print("✅ Copyright year update to 2025")
+    print("=" * 60)
     
     # Start the application
     try:
@@ -926,9 +862,8 @@ if __name__ == '__main__':
         )
     except Exception as e:
         logger.error(f"Failed to start application: {str(e)}")
-        print(f"❌ Error starting application: {str(e)}")
-        print("\n🔧 Troubleshooting:")
+        print(f"Error starting application: {str(e)}")
+        print("\nTroubleshooting:")
         print("1. Make sure port 5000 is not already in use")
-        print("2. Try running without SSL if certificate issues persist") 
+        print("2. Try running without SSL if certificate issues persist")
         print("3. Check that all required packages are installed")
-        print("4. Run: pip install flask flask-sqlalchemy flask-bcrypt flask-login zxcvbn cryptography bleach")
