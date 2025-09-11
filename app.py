@@ -86,64 +86,6 @@ def format_ist_time(dt: datetime) -> str:
         dt = pytz.utc.localize(dt).astimezone(IST)
     return dt.strftime('%Y-%m-%d %H:%M:%S IST')
 
-# ===== DATA MODELS =====
-@dataclass
-class User:
-    """Enhanced user model with security tracking"""
-    id: Optional[int] = None
-    username: str = ""
-    password_hash: str = ""
-    salt: str = ""
-    created_at: Optional[datetime] = None
-    last_login: Optional[datetime] = None
-    login_attempts: int = 0
-    locked_until: Optional[datetime] = None
-    settings: Dict[str, Any] = None
-
-    def __post_init__(self):
-        if self.settings is None:
-            self.settings = {
-                'breach_alerts': True,
-                'password_age_warnings': True,
-                'email_notifications': False,
-                'phone_notifications': False,
-                'security_scanning': True
-            }
-
-@dataclass
-class VaultEntry:
-    """Enhanced vault entry with security metrics"""
-    id: Optional[int] = None
-    user_id: int = 0
-    site_name: str = ""
-    site_url: str = ""
-    username: str = ""
-    encrypted_password: str = ""
-    notes: str = ""
-    strength_score: int = 0
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    last_accessed: Optional[datetime] = None
-    access_count: int = 0
-    breach_detected: bool = False
-
-@dataclass
-class SecurityNotification:
-    """Security notification model"""
-    id: Optional[int] = None
-    user_id: int = 0
-    notification_type: str = ""  # breach, weak, age, security, info
-    title: str = ""
-    message: str = ""
-    priority: str = "medium"  # low, medium, high, critical
-    acknowledged: bool = False
-    created_at: Optional[datetime] = None
-    data: Dict[str, Any] = None
-
-    def __post_init__(self):
-        if self.data is None:
-            self.data = {}
-
 # ===== ENHANCED ENCRYPTION =====
 class AdvancedEncryption:
     """Enhanced encryption with PBKDF2 and AES-256"""
@@ -741,7 +683,6 @@ def get_vault_entries():
     """Get all vault entries for the user"""
     try:
         user_id = session['user_id']
-        master_password = request.headers.get('X-Master-Password')
         
         with db.get_connection() as conn:
             entries = conn.execute('''
@@ -804,18 +745,16 @@ def save_vault_entry():
         username = data.get('username', '').strip()
         password = data.get('password', '')
         notes = data.get('notes', '').strip()
+        master_password = data.get('master_password', '')
         
         if not all([site_name, username, password]):
             return jsonify({'error': 'Site name, username, and password are required'}), 400
         
-        # Analyze password strength
-        strength_analysis = security_manager.analyze_password_strength(password)
-        
-        # Get master password from session context (this is simplified - in production,
-        # you'd need to re-authenticate or use a more secure method)
-        master_password = data.get('master_password', '')
         if not master_password:
             return jsonify({'error': 'Master password required for encryption'}), 400
+        
+        # Analyze password strength
+        strength_analysis = security_manager.analyze_password_strength(password)
         
         # Encrypt the password
         encrypted_password = encryption.encrypt_data(password, master_password, salt)
