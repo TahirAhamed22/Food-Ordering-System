@@ -3,28 +3,480 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - PassManager</title>
+    <title>Login - VaultGuard Password Manager</title>
+    
+    <!-- Meta Tags -->
+    <meta name="description" content="Secure login to VaultGuard - Military-grade password manager with advanced security features.">
+    <meta name="robots" content="noindex, nofollow">
+    
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔐</text></svg>">
+    
+    <!-- CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body data-theme="dark">
-    <div class="auth-container">
-        <div class="auth-page-card">
-            <h2>Login to PassManager</h2>
-            <form id="login-form" method="POST" action="{{ url_for('login') }}">
-                <div class="input-group">
-                    <label for="username">Username</label>
-                    <input type="text" name="username" id="username" required>
-                </div>
-                <div class="input-group">
-                    <label for="password">Password</label>
-                    <input type="password" name="password" id="password" required>
-                </div>
-                <button type="submit" class="auth-button">Login</button>
-            </form>
-            <p class="auth-page-link">Don't have an account? <a href="{{ url_for('register') }}">Register here</a></p>
-            <p class="auth-page-link"><a href="{{ url_for('home') }}">← Back to Home</a></p>
+<body data-theme="dark" class="auth-page">
+    <!-- Navigation Header -->
+    <header class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <a href="/" class="brand-link">
+                    <span class="brand-icon">🛡️</span>
+                    <span class="brand-text">VaultGuard</span>
+                </a>
+            </div>
+            
+            <div class="nav-controls">
+                <button class="nav-btn" id="themeToggle" title="Toggle theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+                
+                <a href="/register" class="nav-btn">
+                    <i class="fas fa-user-plus"></i>
+                    <span>Register</span>
+                </a>
+            </div>
         </div>
-    </div>
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    </header>
+
+    <!-- Login Container -->
+    <main class="auth-container">
+        <div class="auth-card">
+            <!-- Header -->
+            <div class="auth-header">
+                <div class="auth-icon">🔐</div>
+                <h1 class="auth-title">Secure Login</h1>
+                <p class="auth-subtitle">
+                    Access your encrypted password vault with military-grade security
+                </p>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm" class="auth-form">
+                <div class="form-group">
+                    <label for="username">
+                        <i class="fas fa-user"></i>
+                        Username
+                    </label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        name="username"
+                        class="form-input" 
+                        placeholder="Enter your username"
+                        required 
+                        autocomplete="username"
+                        maxlength="50"
+                    >
+                    <div class="input-validation" id="usernameValidation"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">
+                        <i class="fas fa-lock"></i>
+                        Master Password
+                    </label>
+                    <div class="password-input-wrapper">
+                        <input 
+                            type="password" 
+                            id="password" 
+                            name="password"
+                            class="form-input" 
+                            placeholder="Enter your master password"
+                            required 
+                            autocomplete="current-password"
+                            maxlength="128"
+                        >
+                        <button type="button" class="password-toggle" id="passwordToggle">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <div class="input-validation" id="passwordValidation"></div>
+                </div>
+
+                <div class="form-options">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="rememberMe" name="remember">
+                        <span class="checkmark"></span>
+                        <span>Remember me for 30 days</span>
+                    </label>
+                    
+                    <a href="/forgot-password" class="forgot-link">
+                        Forgot password?
+                    </a>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-large" id="loginButton">
+                    <i class="fas fa-shield-alt"></i>
+                    <span class="btn-text">Secure Login</span>
+                    <span class="btn-loading" style="display: none;">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        Authenticating...
+                    </span>
+                </button>
+            </form>
+
+            <!-- Auth Footer -->
+            <div class="auth-footer">
+                <p class="auth-switch">
+                    Don't have an account? 
+                    <a href="/register" class="auth-link">Create Account</a>
+                </p>
+                
+                <div class="security-features">
+                    <div class="feature-item">
+                        <i class="fas fa-shield-check"></i>
+                        <span>Zero-knowledge encryption</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-lock"></i>
+                        <span>AES-256 protection</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-eye-slash"></i>
+                        <span>No password storage</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Notice -->
+        <div class="security-notice">
+            <div class="notice-content">
+                <i class="fas fa-info-circle"></i>
+                <p>
+                    <strong>Security Notice:</strong> Your master password is never stored on our servers. 
+                    All encryption happens locally in your browser using military-grade cryptography.
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="auth-footer-page">
+        <div class="footer-content">
+            <div class="footer-links">
+                <a href="/privacy">Privacy Policy</a>
+                <a href="/security">Security</a>
+                <a href="/">← Back to Analyzer</a>
+            </div>
+            <p class="copyright">
+                &copy; 2025 VaultGuard - Military-grade password security
+            </p>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script>
+        // Login functionality
+        let isLoggingIn = false;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeLoginPage();
+        });
+        
+        function initializeLoginPage() {
+            // Theme toggle
+            const themeToggle = document.getElementById('themeToggle');
+            if (themeToggle) {
+                const theme = localStorage.getItem('theme') || 'dark';
+                document.body.setAttribute('data-theme', theme);
+                updateThemeToggle(theme);
+                
+                themeToggle.addEventListener('click', () => {
+                    const currentTheme = document.body.getAttribute('data-theme');
+                    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                    document.body.setAttribute('data-theme', newTheme);
+                    localStorage.setItem('theme', newTheme);
+                    updateThemeToggle(newTheme);
+                });
+            }
+            
+            // Password visibility toggle
+            const passwordToggle = document.getElementById('passwordToggle');
+            const passwordInput = document.getElementById('password');
+            
+            if (passwordToggle && passwordInput) {
+                passwordToggle.addEventListener('click', () => {
+                    const isPassword = passwordInput.type === 'password';
+                    passwordInput.type = isPassword ? 'text' : 'password';
+                    passwordToggle.innerHTML = isPassword ? '<i class="fas fa-eye-slash"></i>' : '<i class="fas fa-eye"></i>';
+                });
+            }
+            
+            // Form submission
+            const loginForm = document.getElementById('loginForm');
+            if (loginForm) {
+                loginForm.addEventListener('submit', handleLogin);
+            }
+            
+            // Real-time validation
+            const usernameInput = document.getElementById('username');
+            if (usernameInput) {
+                usernameInput.addEventListener('input', validateUsername);
+                usernameInput.addEventListener('blur', validateUsername);
+            }
+            
+            // Auto-focus username field
+            if (usernameInput) {
+                usernameInput.focus();
+            }
+            
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.key === 'Enter') {
+                    e.preventDefault();
+                    loginForm.dispatchEvent(new Event('submit'));
+                }
+            });
+        }
+        
+        function updateThemeToggle(theme) {
+            const themeToggle = document.getElementById('themeToggle');
+            if (themeToggle) {
+                themeToggle.innerHTML = theme === 'dark' 
+                    ? '<i class="fas fa-moon"></i>' 
+                    : '<i class="fas fa-sun"></i>';
+                themeToggle.title = `Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`;
+            }
+        }
+        
+        function validateUsername() {
+            const usernameInput = document.getElementById('username');
+            const validation = document.getElementById('usernameValidation');
+            const username = usernameInput.value.trim();
+            
+            if (!username) {
+                showValidation(validation, '', 'neutral');
+                return false;
+            }
+            
+            if (username.length < 3) {
+                showValidation(validation, 'Username must be at least 3 characters', 'error');
+                return false;
+            }
+            
+            if (username.length > 50) {
+                showValidation(validation, 'Username too long (max 50 characters)', 'error');
+                return false;
+            }
+            
+            if (!/^[a-zA-Z0-9_.-]+$/.test(username)) {
+                showValidation(validation, 'Username can only contain letters, numbers, dots, hyphens, and underscores', 'error');
+                return false;
+            }
+            
+            showValidation(validation, 'Username format is valid', 'success');
+            return true;
+        }
+        
+        function showValidation(element, message, type) {
+            if (!element) return;
+            
+            element.textContent = message;
+            element.className = `input-validation ${type}`;
+            
+            if (type === 'success') {
+                element.innerHTML = `<i class="fas fa-check"></i> ${message}`;
+            } else if (type === 'error') {
+                element.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${message}`;
+            }
+        }
+        
+        async function handleLogin(event) {
+            event.preventDefault();
+            
+            if (isLoggingIn) return;
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const remember = document.getElementById('rememberMe').checked;
+            const loginButton = document.getElementById('loginButton');
+            
+            // Validate inputs
+            if (!username || !password) {
+                showNotification('Please fill in all fields', 'error');
+                return;
+            }
+            
+            if (!validateUsername()) {
+                return;
+            }
+            
+            try {
+                isLoggingIn = true;
+                updateLoginButton(true);
+                
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password,
+                        remember: remember
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showNotification('Login successful! Redirecting...', 'success');
+                    
+                    // Store user info temporarily
+                    sessionStorage.setItem('vaultguard_user', JSON.stringify({
+                        username: data.username,
+                        salt: data.salt
+                    }));
+                    
+                    // Redirect after short delay
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 1500);
+                } else {
+                    showNotification(data.message || 'Login failed', 'error');
+                    
+                    // Shake the form on error
+                    const authCard = document.querySelector('.auth-card');
+                    if (authCard) {
+                        authCard.classList.add('shake');
+                        setTimeout(() => authCard.classList.remove('shake'), 600);
+                    }
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                showNotification('Network error. Please check your connection and try again.', 'error');
+            } finally {
+                isLoggingIn = false;
+                updateLoginButton(false);
+            }
+        }
+        
+        function updateLoginButton(loading) {
+            const button = document.getElementById('loginButton');
+            const btnText = button.querySelector('.btn-text');
+            const btnLoading = button.querySelector('.btn-loading');
+            
+            if (loading) {
+                button.disabled = true;
+                button.classList.add('loading');
+                btnText.style.display = 'none';
+                btnLoading.style.display = 'flex';
+            } else {
+                button.disabled = false;
+                button.classList.remove('loading');
+                btnText.style.display = 'flex';
+                btnLoading.style.display = 'none';
+            }
+        }
+        
+        // Notification system
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            
+            const icons = {
+                success: '<i class="fas fa-check-circle"></i>',
+                error: '<i class="fas fa-exclamation-circle"></i>',
+                warning: '<i class="fas fa-exclamation-triangle"></i>',
+                info: '<i class="fas fa-info-circle"></i>'
+            };
+            
+            notification.innerHTML = `
+                ${icons[type]} ${message}
+                <button class="notification-close" onclick="this.parentElement.remove()">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                if (notification.parentElement) {
+                    notification.remove();
+                }
+            }, 5000);
+        }
+        
+        // Security enhancements
+        
+        // Disable right-click context menu on sensitive elements
+        document.addEventListener('contextmenu', (e) => {
+            if (e.target.type === 'password') {
+                e.preventDefault();
+            }
+        });
+        
+        // Disable password field copy/paste for security (optional)
+        const passwordField = document.getElementById('password');
+        if (passwordField) {
+            passwordField.addEventListener('copy', (e) => {
+                e.preventDefault();
+                showNotification('Copying master password is not allowed for security', 'warning');
+            });
+        }
+        
+        // Clear form on page unload for security
+        window.addEventListener('beforeunload', () => {
+            const form = document.getElementById('loginForm');
+            if (form) {
+                form.reset();
+            }
+        });
+        
+        // Add shake animation CSS
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes shake {
+                0%, 100% { transform: translateX(0); }
+                25% { transform: translateX(-10px); }
+                75% { transform: translateX(10px); }
+            }
+            .shake {
+                animation: shake 0.6s ease-in-out;
+            }
+            .notification {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: var(--primary-color);
+                color: white;
+                padding: 15px 20px;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                font-weight: 500;
+                animation: slideIn 0.3s ease;
+            }
+            .notification.success { background: #2ed573; }
+            .notification.error { background: #ff4757; }
+            .notification.warning { background: #ffa502; }
+            .notification.info { background: #3742fa; }
+            .notification-close {
+                background: none;
+                border: none;
+                color: white;
+                cursor: pointer;
+                margin-left: auto;
+                padding: 5px;
+                border-radius: 3px;
+                opacity: 0.8;
+            }
+            .notification-close:hover { opacity: 1; }
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
 </body>
 </html>
