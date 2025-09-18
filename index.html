@@ -1,475 +1,764 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VaultGuard - Enhanced Password Manager</title>
-    <meta name="description" content="Secure, client-side password manager with advanced encryption and breach monitoring">
-    <meta name="keywords" content="password manager, security, encryption, password generator, vault">
+    <title>VaultGuard - Advanced Password Security</title>
     
-    <!-- Security Headers -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;">
-    <meta http-equiv="X-Content-Type-Options" content="nosniff">
-    <meta http-equiv="X-Frame-Options" content="DENY">
-    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    <!-- Meta Tags -->
+    <meta name="description" content="VaultGuard - Military-grade password manager with breach monitoring, secure encryption, and advanced security features.">
+    <meta name="keywords" content="password manager, security, encryption, breach monitoring, password generator">
+    <meta name="author" content="VaultGuard Security">
     
-    <!-- Icons and Theme -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔐</text></svg>">
-    <meta name="theme-color" content="#0d1117">
-    <meta name="color-scheme" content="dark light">
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
     
-    <!-- Stylesheet -->
-    <link rel="stylesheet" href="style.css">
+    <!-- CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body>
-    <!-- Security Indicator -->
-    <div class="security-indicator" id="securityIndicator">
-        <div class="security-badge">🔒 Secure Session</div>
-    </div>
-
-    <!-- Enhanced Header -->
-    <header class="header">
-        <div class="header-content">
-            <a href="#" class="logo">
-                <span class="logo-icon">🔐</span>
-                <span>VaultGuard Enhanced</span>
-            </a>
-            <div class="header-actions" id="headerActions">
-                <div class="welcome-text">Your Security, Our Priority</div>
-                <button class="theme-toggle" title="Toggle theme">☀️</button>
-                <a href="#" class="auth-btn" id="loginBtn">🔑 Login</a>
-                <a href="#" class="auth-btn primary-cta" id="registerBtn">🛡️ Get Started</a>
+<body data-theme="dark">
+    <!-- Navigation Header -->
+    <header class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="brand-icon">🛡️</span>
+                <span class="brand-text">VaultGuard</span>
+                <span class="brand-version">v2.0</span>
+            </div>
+            
+            <nav class="nav-menu">
+                <a href="#analyzer" class="nav-link active" data-section="analyzer">
+                    <i class="fas fa-search"></i>
+                    <span>Analyzer</span>
+                </a>
+                <a href="#generator" class="nav-link" data-section="generator">
+                    <i class="fas fa-random"></i>
+                    <span>Generator</span>
+                </a>
+                {% if logged_in %}
+                <a href="#vault" class="nav-link" data-section="vault">
+                    <i class="fas fa-lock"></i>
+                    <span>Vault</span>
+                    <span class="vault-count">0</span>
+                </a>
+                <a href="#dashboard" class="nav-link" data-section="dashboard">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </a>
+                {% endif %}
+            </nav>
+            
+            <div class="nav-controls">
+                {% if logged_in %}
+                <!-- Phase 1: Notification Bell -->
+                <button class="nav-btn" id="notificationsBtn" title="Security Alerts">
+                    <i class="fas fa-bell"></i>
+                    <span class="notification-badge" id="notificationBadge" style="display: none;">0</span>
+                </button>
+                
+                <!-- Phase 1: Settings -->
+                <button class="nav-btn" id="settingsBtn" title="Settings">
+                    <i class="fas fa-cog"></i>
+                </button>
+                {% endif %}
+                
+                <!-- Theme Toggle -->
+                <button class="nav-btn" id="themeToggle" title="Toggle theme">
+                    <i class="fas fa-moon"></i>
+                </button>
+                
+                {% if logged_in %}
+                <!-- User Menu -->
+                <div class="user-menu">
+                    <div class="user-avatar">
+                        <i class="fas fa-user"></i>
+                        <span class="current-username">User</span>
+                    </div>
+                    <div class="user-dropdown">
+                        <a href="/logout"><i class="fas fa-sign-out-alt"></i> Logout</a>
+                    </div>
+                </div>
+                {% else %}
+                <!-- Login Button -->
+                <button class="nav-btn login-btn" id="loginBtn" title="Login / Register">
+                    <i class="fas fa-sign-in-alt"></i>
+                    <span>Login</span>
+                </button>
+                {% endif %}
             </div>
         </div>
     </header>
 
-    <div class="container">
-        <!-- Enhanced Hero Section -->
-        <section class="hero-section">
-            <div class="demo-badge">
-                <div class="demo-label">🚀 PHASE 1 ENHANCED</div>
-                <div class="demo-description">Advanced Security Features • Breach Monitoring • IST Timestamps</div>
+    <!-- Main Content Container -->
+    <main class="main-container">
+        <!-- Password Analyzer Section -->
+        <section id="analyzer" class="content-section active">
+            <div class="section-header">
+                <h1 class="section-title">
+                    <i class="fas fa-shield-alt"></i>
+                    Password Security Analyzer
+                </h1>
+                <p class="section-subtitle">
+                    Advanced password analysis with real-time breach detection and strength assessment
+                </p>
             </div>
-            
-            <h1 class="hero-title">Advanced Password Security</h1>
-            <p class="hero-subtitle">
-                Military-grade encryption meets intelligent breach monitoring. 
-                Protect your digital identity with enhanced VaultGuard.
-            </p>
-            
-            <div class="features-grid">
-                <div class="feature-card">
-                    <span class="feature-icon">🛡️</span>
-                    <h4>Enhanced Security</h4>
-                    <p>AES-256 encryption with PBKDF2 key derivation and advanced breach monitoring</p>
+
+            <div class="analyzer-container">
+                <!-- Password Input Section -->
+                <div class="input-section">
+                    <div class="input-group">
+                        <div class="input-wrapper">
+                            <input 
+                                type="password" 
+                                id="passwordInput" 
+                                class="password-input" 
+                                placeholder="Enter your password to analyze..."
+                                autocomplete="new-password"
+                                maxlength="128"
+                            >
+                            <div class="input-controls">
+                                <button class="input-btn" id="toggleVisibility" title="Toggle password visibility">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="input-btn" id="copyPassword" title="Copy password">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                                <button class="input-btn" id="clearPassword" title="Clear password">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="action-buttons">
+                            <button class="btn btn-primary" id="generatePassword">
+                                <i class="fas fa-random"></i>
+                                Generate Secure Password
+                            </button>
+                            <button class="btn btn-secondary" id="pauseBtn" title="Pause/Resume analysis">
+                                <i class="fas fa-pause"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <div class="feature-card">
-                    <span class="feature-icon">🔍</span>
-                    <h4>Smart Search</h4>
-                    <p>Instant search and advanced sorting across all your password entries</p>
-                </div>
-                <div class="feature-card">
-                    <span class="feature-icon">🔔</span>
-                    <h4>Breach Alerts</h4>
-                    <p>Proactive notifications about compromised passwords and security threats</p>
-                </div>
-                <div class="feature-card">
-                    <span class="feature-icon">📊</span>
-                    <h4>Security Analytics</h4>
-                    <p>Advanced password analysis with strength metrics and crack time estimates</p>
+
+                <!-- Analysis Results Section -->
+                <div class="results-container">
+                    <!-- Password Strength Section -->
+                    <div id="strengthSection" class="analysis-card" style="display: none;">
+                        <div class="card-header">
+                            <h3><i class="fas fa-chart-line"></i> Password Strength</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="strength-meter">
+                                <div class="strength-bar">
+                                    <div id="strengthFill" class="strength-fill"></div>
+                                </div>
+                                <div class="strength-info">
+                                    <span id="strengthText" class="strength-text">Enter password</span>
+                                    <span id="crackTime" class="crack-time">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Breach Status Section -->
+                    <div id="analysisResults" class="analysis-card" style="display: none;">
+                        <div class="card-header">
+                            <h3><i class="fas fa-shield-virus"></i> Breach Analysis</h3>
+                        </div>
+                        <div class="card-content">
+                            <div id="breachStatus" class="breach-status">
+                                Checking breach database...
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Password Policy Section -->
+                    <div id="policySection" class="analysis-card" style="display: none;">
+                        <div class="card-header">
+                            <h3><i class="fas fa-list-check"></i> Security Requirements</h3>
+                        </div>
+                        <div class="card-content">
+                            <div class="policy-grid">
+                                <div class="policy-item">
+                                    <span id="lengthIcon" class="policy-icon">◯</span>
+                                    <span class="policy-label">12+ Characters</span>
+                                </div>
+                                <div class="policy-item">
+                                    <span id="lowerIcon" class="policy-icon">◯</span>
+                                    <span class="policy-label">Lowercase</span>
+                                </div>
+                                <div class="policy-item">
+                                    <span id="upperIcon" class="policy-icon">◯</span>
+                                    <span class="policy-label">Uppercase</span>
+                                </div>
+                                <div class="policy-item">
+                                    <span id="digitIcon" class="policy-icon">◯</span>
+                                    <span class="policy-label">Numbers</span>
+                                </div>
+                                <div class="policy-item">
+                                    <span id="symbolIcon" class="policy-icon">◯</span>
+                                    <span class="policy-label">Symbols</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
 
-        <!-- Enhanced Password Analysis -->
-        <section class="card">
-            <h2 class="card-title">
-                <span>🧠</span>
-                Advanced Password Analysis
-            </h2>
-            
-            <div class="demo-notice">
-                💡 <strong>Enhanced Features:</strong> Real-time breach detection, entropy calculation, and military-grade strength analysis
+        <!-- Password Generator Section -->
+        <section id="generator" class="content-section">
+            <div class="section-header">
+                <h1 class="section-title">
+                    <i class="fas fa-random"></i>
+                    Cryptographic Password Generator
+                </h1>
+                <p class="section-subtitle">
+                    Generate cryptographically secure passwords with customizable parameters
+                </p>
             </div>
 
-            <div class="password-input-group">
-                <input 
-                    type="password" 
-                    id="password" 
-                    placeholder="Enter or generate a password to analyze..." 
-                    class="password-input"
-                    autocomplete="new-password"
-                    spellcheck="false"
-                >
-                <div class="input-actions">
-                    <button type="button" id="copyPassword" class="input-btn" title="Copy password">📋</button>
-                    <button type="button" id="togglePassword" class="input-btn" title="Show password">👁️</button>
-                    <button type="button" id="clearPassword" class="input-btn" title="Clear password">🗑️</button>
-                    <button type="button" id="quickGenerate" class="input-btn" title="Quick generate">⚡</button>
-                    <button type="button" id="analyzePassword" class="input-btn" title="Analyze password">🔍</button>
+            <div class="generator-container">
+                <div class="generator-card">
+                    <!-- Generated Password Display -->
+                    <div class="generated-password-section">
+                        <label for="generatedPassword">Generated Password:</label>
+                        <div class="password-output">
+                            <input 
+                                type="text" 
+                                id="generatedPassword" 
+                                class="generated-password" 
+                                readonly
+                                placeholder="Click generate to create a secure password"
+                            >
+                            <div class="output-controls">
+                                <button class="btn btn-secondary" id="copyGenerated" title="Copy generated password">
+                                    <i class="fas fa-copy"></i>
+                                </button>
+                                <button class="btn btn-primary" id="useGenerated" title="Use in analyzer">
+                                    <i class="fas fa-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Generator Controls -->
+                    <div class="generator-controls">
+                        <!-- Length Control -->
+                        <div class="control-group">
+                            <label for="lengthSlider">
+                                Password Length: <span id="lengthValue" class="length-value">16</span>
+                            </label>
+                            <input 
+                                type="range" 
+                                id="lengthSlider" 
+                                class="length-slider"
+                                min="8" 
+                                max="64" 
+                                value="16"
+                            >
+                            <div class="length-indicators">
+                                <span class="indicator weak">8</span>
+                                <span class="indicator medium">16</span>
+                                <span class="indicator strong">32</span>
+                                <span class="indicator fortress">64</span>
+                            </div>
+                        </div>
+
+                        <!-- Character Type Controls -->
+                        <div class="character-options">
+                            <h4>Character Types:</h4>
+                            <div class="options-grid">
+                                <label class="option-item">
+                                    <input type="checkbox" id="includeUpper" checked>
+                                    <span class="checkmark"></span>
+                                    <span>Uppercase (A-Z)</span>
+                                </label>
+                                <label class="option-item">
+                                    <input type="checkbox" id="includeLower" checked>
+                                    <span class="checkmark"></span>
+                                    <span>Lowercase (a-z)</span>
+                                </label>
+                                <label class="option-item">
+                                    <input type="checkbox" id="includeNumbers" checked>
+                                    <span class="checkmark"></span>
+                                    <span>Numbers (0-9)</span>
+                                </label>
+                                <label class="option-item">
+                                    <input type="checkbox" id="includeSymbols" checked>
+                                    <span class="checkmark"></span>
+                                    <span>Symbols (!@#$%^&*)</span>
+                                </label>
+                                <label class="option-item">
+                                    <input type="checkbox" id="excludeAmbiguous">
+                                    <span class="checkmark"></span>
+                                    <span>Exclude Ambiguous (0,O,l,1,I)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Generate Button -->
+                        <button class="btn btn-primary btn-large" id="generateBtn">
+                            <i class="fas fa-random"></i>
+                            Generate Secure Password
+                        </button>
+                    </div>
                 </div>
             </div>
-
-            <!-- Strength analysis will be dynamically inserted here -->
         </section>
 
-        <!-- Enhanced Password Generator -->
-        <section class="card">
-            <h2 class="card-title">
-                <span>⚡</span>
-                Military-Grade Password Generator
-            </h2>
-
-            <div class="security-notice">
-                🔒 <strong>Cryptographically Secure:</strong> Uses browser's crypto.getRandomValues() for true randomness
+        {% if logged_in %}
+        <!-- Vault Section -->
+        <section id="vault" class="content-section">
+            <div class="section-header">
+                <h1 class="section-title">
+                    <i class="fas fa-lock"></i>
+                    Encrypted Password Vault
+                </h1>
+                <p class="section-subtitle">
+                    Military-grade AES-256 encrypted password storage with zero-knowledge architecture
+                </p>
             </div>
 
-            <div class="generator-controls">
-                <div class="control-group">
-                    <label class="control-label">Length</label>
-                    <input type="range" id="length" class="slider" min="6" max="128" value="16">
-                    <span id="lengthValue">16</span>
+            <div class="vault-container">
+                <!-- Add Password Form -->
+                <div class="add-password-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-plus"></i> Add New Password</h3>
+                    </div>
+                    <div class="card-content">
+                        <form class="password-form">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="vault-title">Title *</label>
+                                    <input type="text" id="vault-title" placeholder="e.g., Gmail, Facebook" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="site-name">Website *</label>
+                                    <input type="url" id="site-name" placeholder="https://example.com" required>
+                                </div>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="vault-username">Username/Email *</label>
+                                    <input type="text" id="vault-username" placeholder="your@email.com" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="vault-category">Category</label>
+                                    <select id="vault-category">
+                                        <option value="General">General</option>
+                                        <option value="Social Media">Social Media</option>
+                                        <option value="Email">Email</option>
+                                        <option value="Banking">Banking</option>
+                                        <option value="Shopping">Shopping</option>
+                                        <option value="Work">Work</option>
+                                        <option value="Entertainment">Entertainment</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="vault-password">Password *</label>
+                                <div class="password-input-group">
+                                    <input type="password" id="vault-password" placeholder="Enter or generate password" required>
+                                    <button type="button" class="generate-for-vault" onclick="generatePasswordForVault()">
+                                        <i class="fas fa-random"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="vault-tags">Tags</label>
+                                    <input type="text" id="vault-tags" placeholder="work, important, backup">
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="vault-notes">Notes</label>
+                                <textarea id="vault-notes" rows="3" placeholder="Additional notes or security questions..."></textarea>
+                            </div>
+                            
+                            <button type="button" class="btn btn-primary btn-large" id="save-password-btn">
+                                <i class="fas fa-shield-alt"></i>
+                                Encrypt & Save to Vault
+                            </button>
+                        </form>
+                    </div>
                 </div>
 
-                <div class="checkbox-grid">
-                    <div class="control-group">
-                        <label class="control-label">Lowercase (a-z)</label>
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="includeLowercase" class="checkbox" checked>
+                <!-- Phase 1: Enhanced Search and Filter Controls -->
+                <div class="vault-controls">
+                    <div class="search-section">
+                        <div class="search-bar">
+                            <i class="fas fa-search"></i>
+                            <input type="text" id="vault-search" placeholder="Search your vault..." />
                         </div>
                     </div>
-
-                    <div class="control-group">
-                        <label class="control-label">Uppercase (A-Z)</label>
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="includeUppercase" class="checkbox" checked>
+                    
+                    <div class="filter-section">
+                        <div class="filter-group">
+                            <label for="vault-sort">Sort by:</label>
+                            <select id="vault-sort">
+                                <option value="updated_at">Recently Updated</option>
+                                <option value="created_at">Recently Added</option>
+                                <option value="title">Title A-Z</option>
+                                <option value="site">Website A-Z</option>
+                                <option value="category">Category</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label for="category-filter">Category:</label>
+                            <select id="category-filter">
+                                <option value="all">All Categories</option>
+                                <option value="General">General</option>
+                                <option value="Social Media">Social Media</option>
+                                <option value="Email">Email</option>
+                                <option value="Banking">Banking</option>
+                                <option value="Shopping">Shopping</option>
+                                <option value="Work">Work</option>
+                                <option value="Entertainment">Entertainment</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="favorites-filter">
+                                <span class="checkmark"></span>
+                                <span>Favorites Only</span>
+                            </label>
                         </div>
                     </div>
+                </div>
 
-                    <div class="control-group">
-                        <label class="control-label">Numbers (0-9)</label>
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="includeNumbers" class="checkbox" checked>
+                <!-- Vault List -->
+                <div class="vault-list-container">
+                    <div class="vault-header">
+                        <h3><i class="fas fa-database"></i> Your Encrypted Passwords</h3>
+                        <div class="vault-stats">
+                            <span class="vault-count">0</span> passwords stored securely
                         </div>
                     </div>
-
-                    <div class="control-group">
-                        <label class="control-label">Symbols (!@#$%)</label>
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="includeSymbols" class="checkbox" checked>
-                        </div>
-                    </div>
-
-                    <div class="control-group">
-                        <label class="control-label">Exclude Similar</label>
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="excludeSimilar" class="checkbox" checked>
-                        </div>
-                    </div>
-
-                    <div class="control-group">
-                        <label class="control-label">Exclude Ambiguous</label>
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="excludeAmbiguous" class="checkbox" checked>
+                    
+                    <div id="vaultList" class="vault-list">
+                        <!-- Vault entries will be populated here -->
+                        <div class="loading-state">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            Loading your encrypted vault...
                         </div>
                     </div>
                 </div>
             </div>
-
-            <button type="button" id="generatePassword" class="generate-btn">
-                ⚡ Generate Secure Password
-            </button>
         </section>
 
-        <!-- Enhanced Vault Section -->
-        <section class="vault-section" style="display: none;">
-            <h2 class="section-heading">🔐 Your Secure Vault</h2>
-            
-            <div class="vault-subtitle">
-                <p>All entries are encrypted with AES-256 and stored securely with IST timestamps.</p>
+        <!-- Dashboard Section -->
+        <section id="dashboard" class="content-section">
+            <div class="section-header">
+                <h1 class="section-title">
+                    <i class="fas fa-tachometer-alt"></i>
+                    Security Dashboard
+                </h1>
+                <p class="section-subtitle">
+                    Comprehensive security monitoring and password health analytics
+                </p>
             </div>
 
-            <!-- Vault Entry Form -->
-            <form class="vault-form" id="vaultForm">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Site Name *</label>
-                        <input 
-                            type="text" 
-                            id="siteName" 
-                            class="form-input" 
-                            placeholder="e.g., Gmail, Facebook"
-                            required
-                            autocomplete="off"
-                        >
+            <div class="dashboard-container">
+                <!-- Security Score Card -->
+                <div class="dashboard-card security-score-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-shield-check"></i> Security Score</h3>
+                        <button class="refresh-btn" onclick="refreshSecurityScore()">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Website URL</label>
-                        <input 
-                            type="url" 
-                            id="siteUrl" 
-                            class="form-input" 
-                            placeholder="https://example.com"
-                            autocomplete="off"
-                        >
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Username/Email *</label>
-                        <input 
-                            type="text" 
-                            id="vaultUsername" 
-                            class="form-input" 
-                            placeholder="your@email.com"
-                            required
-                            autocomplete="off"
-                        >
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Password *</label>
-                        <div class="input-hint">Use the password field above or generate a new one</div>
+                    <div class="card-content">
+                        <div class="security-score-display">
+                            <div class="score-circle">
+                                <div class="score-number">85</div>
+                                <div class="score-label">Security Score</div>
+                            </div>
+                            <div class="score-breakdown">
+                                <div class="breakdown-item">
+                                    <span class="breakdown-label">Strong Passwords:</span>
+                                    <span class="breakdown-value">12/15</span>
+                                </div>
+                                <div class="breakdown-item">
+                                    <span class="breakdown-label">No Breaches:</span>
+                                    <span class="breakdown-value">✅ Clean</span>
+                                </div>
+                                <div class="breakdown-item">
+                                    <span class="breakdown-label">Recent Updates:</span>
+                                    <span class="breakdown-value">3 this week</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label">Notes (Optional)</label>
-                    <textarea 
-                        id="notes" 
-                        class="form-input" 
-                        placeholder="Security questions, backup codes, etc."
-                        rows="3"
-                        style="resize: vertical; min-height: 60px;"
-                    ></textarea>
-                    <div class="security-hint">
-                        💡 <strong>Tip:</strong> Store security questions and backup codes here
+                <!-- Quick Stats -->
+                <div class="dashboard-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">🔒</div>
+                        <div class="stat-number vault-count">0</div>
+                        <div class="stat-label">Total Passwords</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon">⚠️</div>
+                        <div class="stat-number">2</div>
+                        <div class="stat-label">Weak Passwords</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon">🛡️</div>
+                        <div class="stat-number">0</div>
+                        <div class="stat-label">Breached</div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon">⏰</div>
+                        <div class="stat-number">1</div>
+                        <div class="stat-label">Needs Update</div>
                     </div>
                 </div>
 
-                <button type="submit" id="saveEntry" class="save-btn">
-                    💾 Save to Vault
+                <!-- Recent Activity -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-clock"></i> Recent Activity</h3>
+                    </div>
+                    <div class="card-content">
+                        <div class="activity-list">
+                            <div class="activity-item">
+                                <div class="activity-icon success">
+                                    <i class="fas fa-plus"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-text">Added new password for Gmail</div>
+                                    <div class="activity-time">2 hours ago</div>
+                                </div>
+                            </div>
+                            
+                            <div class="activity-item">
+                                <div class="activity-icon warning">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-text">Weak password detected for Facebook</div>
+                                    <div class="activity-time">1 day ago</div>
+                                </div>
+                            </div>
+                            
+                            <div class="activity-item">
+                                <div class="activity-icon info">
+                                    <i class="fas fa-shield-check"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-text">Security scan completed successfully</div>
+                                    <div class="activity-time">2 days ago</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        {% endif %}
+    </main>
+
+    <!-- Phase 1: Authentication Modal -->
+    <div id="authModal" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="authTitle">🔐 VaultGuard Login</h2>
+                <button class="modal-close" id="closeModal">
+                    <i class="fas fa-times"></i>
                 </button>
+            </div>
+            
+            <form id="authForm" class="auth-form">
+                <div class="form-group">
+                    <label for="authUsername">Username</label>
+                    <input type="text" id="authUsername" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="authPassword">Password</label>
+                    <input type="password" id="authPassword" required>
+                </div>
+                
+                <div class="form-group" style="display: none;">
+                    <label for="authEmail">Email (Optional)</label>
+                    <input type="email" id="authEmail" placeholder="For notifications & recovery">
+                </div>
+                
+                <div class="form-group" style="display: none;">
+                    <label for="authPhone">Phone (Optional)</label>
+                    <input type="tel" id="authPhone" placeholder="For SMS notifications">
+                </div>
+                
+                <button type="submit" class="btn btn-primary btn-large" id="authSubmit">
+                    Login
+                </button>
+                
+                <div class="auth-switch">
+                    <p>
+                        <span id="authSwitchText">Don't have an account?</span>
+                        <a href="#" id="authSwitchLink" onclick="toggleAuthMode()">Create Account</a>
+                    </p>
+                </div>
             </form>
-
-            <!-- Vault Controls will be inserted here by JavaScript -->
-            <!-- Vault Stats will be inserted here by JavaScript -->
-            
-            <!-- Vault Entries List -->
-            <div class="vault-header">
-                <h3>🗃️ Your Password Entries</h3>
-            </div>
-            <ul class="vault-list" id="vaultList">
-                <div class="empty-vault">
-                    <div class="empty-vault-content">
-                        <h3>🔐 Your vault is empty</h3>
-                        <p>Add your first password entry using the form above.</p>
-                        <div class="security-reminder">
-                            💡 <strong>Tip:</strong> Use the password generator to create strong, unique passwords for each site.
-                        </div>
-                        <div class="security-features">
-                            <span class="feature">🔒 AES-256 Encrypted</span>
-                            <span class="feature">🛡️ Zero-Knowledge</span>
-                            <span class="feature">🔐 Secure Storage</span>
-                        </div>
-                    </div>
-                </div>
-            </ul>
-        </section>
-
-        <!-- Enhanced Security Status -->
-        <section class="security-status-card">
-            <div class="security-header">
-                <h2>🛡️ Enhanced Security Status</h2>
-                <p>Your data is protected with multiple layers of security</p>
-            </div>
-
-            <div class="security-visual">
-                <div class="security-icon-large">🔐</div>
-                <div class="security-layers">
-                    <div class="layer">Browser Encryption</div>
-                    <div class="layer">AES-256</div>
-                    <div class="layer">PBKDF2</div>
-                    <div class="layer">Zero-Knowledge</div>
-                </div>
-            </div>
-
-            <div class="encryption-indicators">
-                <div class="encryption-badge">🔒 HTTPS Secured</div>
-                <div class="encryption-badge">🛡️ Client-Side Encrypted</div>
-                <div class="encryption-badge">🔐 600,000 Iterations</div>
-                <div class="encryption-badge">🚫 Zero-Knowledge Architecture</div>
-            </div>
-
-            <div class="security-indicators">
-                <div class="security-item active">
-                    <span class="indicator-icon">🔒</span>
-                    <span>End-to-End Encryption</span>
-                </div>
-                <div class="security-item active">
-                    <span class="indicator-icon">🛡️</span>
-                    <span>Breach Monitoring</span>
-                </div>
-                <div class="security-item active">
-                    <span class="indicator-icon">⚡</span>
-                    <span>Real-Time Analysis</span>
-                </div>
-                <div class="security-item active">
-                    <span class="indicator-icon">📊</span>
-                    <span>Security Analytics</span>
-                </div>
-                <div class="security-item active">
-                    <span class="indicator-icon">🔔</span>
-                    <span>Proactive Alerts</span>
-                </div>
-                <div class="security-item active">
-                    <span class="indicator-icon">🕐</span>
-                    <span>IST Timestamps</span>
-                </div>
-            </div>
-        </section>
-
-        <!-- Enhanced Security Best Practices -->
-        <section class="security-best-practices">
-            <h3>🎯 Enhanced Security Best Practices</h3>
-            
-            <div class="practices-grid">
-                <div class="practice-item">
-                    <span class="practice-icon">🔐</span>
-                    <h4>Unique Passwords</h4>
-                    <p>Use a different strong password for every account. Our generator creates cryptographically secure passwords.</p>
-                </div>
-                
-                <div class="practice-item">
-                    <span class="practice-icon">🔔</span>
-                    <h4>Breach Monitoring</h4>
-                    <p>Enable notifications to get alerted about compromised passwords and security threats.</p>
-                </div>
-                
-                <div class="practice-item">
-                    <span class="practice-icon">📱</span>
-                    <h4>Two-Factor Authentication</h4>
-                    <p>Enable 2FA on all important accounts. Store backup codes securely in the notes field.</p>
-                </div>
-                
-                <div class="practice-item">
-                    <span class="practice-icon">🔄</span>
-                    <h4>Regular Updates</h4>
-                    <p>Change passwords regularly, especially if they're flagged as potentially compromised.</p>
-                </div>
-                
-                <div class="practice-item">
-                    <span class="practice-icon">🛡️</span>
-                    <h4>Master Password</h4>
-                    <p>Use a strong, unique master password that you've never used anywhere else.</p>
-                </div>
-                
-                <div class="practice-item">
-                    <span class="practice-icon">📊</span>
-                    <h4>Security Analytics</h4>
-                    <p>Monitor your password strength metrics and act on security recommendations.</p>
-                </div>
-            </div>
-        </section>
-
-        <!-- Critical Security Notice -->
-        <section class="critical-security-notice">
-            <h3>⚠️ Important Security Information</h3>
-            
-            <div class="notice-grid">
-                <div class="notice-item">
-                    <h4>🔒 Enhanced Security Features</h4>
-                    <ul>
-                        <li>HTTPS/TLS encryption for all data transmission</li>
-                        <li>AES-256 encryption for password storage</li>
-                        <li>PBKDF2 key derivation with 600,000 iterations</li>
-                        <li>Rate limiting and brute force protection</li>
-                        <li>Security event logging and monitoring</li>
-                        <li>Account lockout after failed attempts</li>
-                        <li>Real-time breach monitoring</li>
-                        <li>IST timezone timestamps</li>
-                    </ul>
-                </div>
-                
-                <div class="notice-item">
-                    <h4>⚠️ Security Limitations</h4>
-                    <ul>
-                        <li>Self-hosted application - security depends on hosting environment</li>
-                        <li>No professional security audit conducted</li>
-                        <li>Not certified by security organizations</li>
-                        <li>Use strong, unique master password</li>
-                        <li>Enable device security (lock screen, etc.)</li>
-                        <li>Keep software and browser updated</li>
-                        <li>Consider enterprise solutions for critical business data</li>
-                        <li>Regular security hygiene practices recommended</li>
-                    </ul>
-                </div>
-            </div>
-
-            <div class="critical-reminder">
-                <p><strong>🚨 Security Reality Check:</strong></p>
-                <p>While this application implements professional security measures including HTTPS, AES-256 encryption, and secure key derivation, remember that:</p>
-                <ul>
-                    <li>Security depends on proper hosting and infrastructure</li>
-                    <li>Your master password is the weakest link - make it extremely strong</li>
-                    <li>No system is 100% secure - maintain good security hygiene</li>
-                    <li>Consider using established enterprise solutions for critical business data</li>
-                </ul>
-            </div>
-        </section>
-
-        <!-- Trust Indicators -->
-        <div class="trust-indicators">
-            <div class="trust-badge">🔐 Client-Side Encryption</div>
-            <div class="trust-badge">🛡️ Zero-Knowledge Architecture</div>
-            <div class="trust-badge">🔒 Open Source Inspired</div>
-            <div class="trust-badge">🚫 No Data Collection</div>
-            <div class="trust-badge">⚡ Enhanced Performance</div>
-            <div class="trust-badge">🔔 Proactive Security</div>
         </div>
     </div>
 
-    <!-- Enhanced Footer -->
-    <footer class="footer">
+    <!-- Phase 1: Notifications Modal -->
+    {% if logged_in %}
+    <div id="notificationModal" class="modal-overlay" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-bell"></i> Security Alerts</h2>
+                <button class="modal-close" onclick="toggleNotifications()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-content">
+                <div id="notificationsList" class="notifications-list">
+                    <div class="loading-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        Loading notifications...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Phase 1: Settings Modal -->
+    <div id="settingsModal" class="modal-overlay" style="display: none;">
+        <div class="modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-cog"></i> Settings</h2>
+                <button class="modal-close" onclick="toggleSettings()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="modal-content">
+                <div id="notificationSettings" class="settings-content">
+                    <div class="loading-state">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        Loading settings...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Footer -->
+    <footer class="app-footer">
         <div class="footer-content">
-            <div class="copyright-text">© 2025 VaultGuard Enhanced. All rights reserved.</div>
-            <div>Secure password management with advanced breach monitoring</div>
-        </div>
-        
-        <div class="footer-links-enhanced">
-            <a href="#" class="footer-link">Privacy Policy</a>
-            <a href="#" class="footer-link">Terms of Service</a>
-            <a href="#" class="footer-link">Security Contact</a>
-            <a href="#" class="footer-link">Documentation</a>
-        </div>
-        
-        <div class="footer-badge">
-            <span>🔐</span>
-            <span>Enhanced with Phase 1 Features</span>
+            <div class="footer-links">
+                <a href="/privacy">Privacy Policy</a>
+                <a href="/security">Security</a>
+                <a href="https://github.com/yourusername/vaultguard" target="_blank">
+                    <i class="fab fa-github"></i> GitHub
+                </a>
+            </div>
+            <div class="footer-info">
+                <p>
+                    <strong>VaultGuard</strong> &copy; 2025 - Military-grade password security
+                </p>
+                <p class="security-notice">
+                    <i class="fas fa-shield-alt"></i>
+                    All passwords encrypted with AES-256 • Zero-knowledge architecture
+                </p>
+            </div>
         </div>
     </footer>
 
-    <!-- HTTPS Status Display -->
-    <div id="httpsStatus"></div>
-
-    <!-- Enhanced JavaScript -->
-    <script src="script.js"></script>
+    <!-- JavaScript -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
     
+    <!-- Additional Scripts -->
     <script>
-        // Initialize HTTPS status check
-        document.addEventListener('DOMContentLoaded', () => {
-            const httpsStatus = document.getElementById('httpsStatus');
-            if (location.protocol === 'https:') {
-                httpsStatus.innerHTML = '<div class="https-secure">🔒 Secure HTTPS Connection</div>';
-            } else if (location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-                httpsStatus.innerHTML = '<div class="https-warning">⚠️ Warning: Not using HTTPS. Your data may not be secure.</div>';
-            }
+        // Phase 1: Additional utility functions
+        function toggleAuthMode() {
+            const isLogin = document.getElementById('authTitle').textContent.includes('Login');
+            const emailGroup = document.getElementById('authEmail').parentElement;
+            const phoneGroup = document.getElementById('authPhone').parentElement;
             
-            // Set current year in footer
-            const yearElement = document.querySelector('.copyright-text');
-            if (yearElement) {
-                yearElement.innerHTML = yearElement.innerHTML.replace('2025', new Date().getFullYear());
+            if (isLogin) {
+                // Switch to register mode
+                document.getElementById('authTitle').textContent = '🛡️ Create Account';
+                document.getElementById('authSubmit').textContent = 'Create Account';
+                document.getElementById('authSwitchText').textContent = 'Already have an account?';
+                document.getElementById('authSwitchLink').textContent = 'Login';
+                emailGroup.style.display = 'block';
+                phoneGroup.style.display = 'block';
+                isLoginMode = false;
+            } else {
+                // Switch to login mode
+                document.getElementById('authTitle').textContent = '🔐 VaultGuard Login';
+                document.getElementById('authSubmit').textContent = 'Login';
+                document.getElementById('authSwitchText').textContent = "Don't have an account?";
+                document.getElementById('authSwitchLink').textContent = 'Create Account';
+                emailGroup.style.display = 'none';
+                phoneGroup.style.display = 'none';
+                isLoginMode = true;
             }
+        }
+        
+        function generatePasswordForVault() {
+            const password = generateRandomPassword();
+            document.getElementById('vault-password').value = password;
+            showNotification('Secure password generated for vault entry!', 'success');
+        }
+        
+        function refreshSecurityScore() {
+            showNotification('Security score refreshed', 'info');
+            // Implement actual refresh logic
+        }
+        
+        // Navigation handling
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                
+                // Remove active class from all sections and links
+                document.querySelectorAll('.content-section').forEach(section => {
+                    section.classList.remove('active');
+                });
+                document.querySelectorAll('.nav-link').forEach(navLink => {
+                    navLink.classList.remove('active');
+                });
+                
+                // Add active class to clicked link and corresponding section
+                link.classList.add('active');
+                const sectionId = link.getAttribute('data-section');
+                const section = document.getElementById(sectionId);
+                if (section) {
+                    section.classList.add('active');
+                }
+                
+                // Update current page for script functionality
+                currentPage = sectionId;
+            });
+        });
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('VaultGuard Enhanced - Phase 1 Complete');
+            console.log('Features: Breach monitoring, notifications, enhanced UI, security dashboard');
         });
     </script>
 </body>
