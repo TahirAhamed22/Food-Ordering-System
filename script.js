@@ -1,2030 +1,1456 @@
-// ===== VAULTGUARD ENHANCED SCRIPT - PHASE 1 COMPLETE =====
-// Advanced Password Manager with Enhanced Security Features
+// ===== ENHANCED VAULTGUARD SCRIPT - PHASE 1 COMPLETE =====
+// Fixed errors, added Phase 1 features, proper integration
 
-// ===== GLOBAL STATE MANAGEMENT =====
-class VaultGuardState {
-    constructor() {
-        this.isAuthenticated = false;
-        this.masterPassword = null;
-        this.currentUser = null;
-        this.vaultEntries = [];
-        this.notifications = [];
-        this.settings = {
-            breachAlerts: true,
-            passwordAgeWarnings: true,
-            emailNotifications: false,
-            phoneNotifications: false,
-            securityScanning: true
-        };
-        this.searchTerm = '';
-        this.sortBy = 'name';
-        this.sortOrder = 'asc';
-        this.sessionTimeout = null;
-        this.lastActivity = Date.now();
-    }
+// Global Variables
+let analysisEnabled = true;
+let currentUserSalt = null;
+let masterPasswordCache = null;
+let securityMode = true;
+let themePreference = localStorage.getItem('theme') || 'dark';
+let isLoginMode = true;
+let vaultData = [];
+let vaultFilter = '';
+let vaultSortBy = 'updated_at';
+let currentPage = 'analyzer';
 
-    updateActivity() {
-        this.lastActivity = Date.now();
-        this.resetSessionTimeout();
-    }
+// Phase 1: Enhanced password generator settings
+let passwordGeneratorSettings = {
+    length: 16,
+    includeUpper: true,
+    includeLower: true,
+    includeNumbers: true,
+    includeSymbols: true,
+    excludeAmbiguous: false
+};
 
-    resetSessionTimeout() {
-        if (this.sessionTimeout) {
-            clearTimeout(this.sessionTimeout);
-        }
-        // 15 minutes session timeout
-        this.sessionTimeout = setTimeout(() => {
-            this.logout();
-            showNotification('Session expired for security', 'warning');
-        }, 15 * 60 * 1000);
-    }
+// Performance tracking
+let performanceMetrics = {
+    pageLoadTime: 0,
+    analysisCount: 0,
+    apiCallCount: 0
+};
 
-    logout() {
-        this.isAuthenticated = false;
-        this.masterPassword = null;
-        this.currentUser = null;
-        this.vaultEntries = [];
-        if (this.sessionTimeout) {
-            clearTimeout(this.sessionTimeout);
-        }
-        location.reload();
-    }
-}
+// DOM Elements Cache
+let elements = {};
 
-// Global state instance
-const vaultState = new VaultGuardState();
-
-// ===== ENHANCED API CLIENT WITH PROPER ERROR HANDLING =====
-class VaultGuardAPI {
-    constructor() {
-        this.baseURL = window.location.origin;
-        this.headers = {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            'Accept': 'application/json'
-        };
-    }
-
-    async request(endpoint, options = {}) {
-        const url = `${this.baseURL}${endpoint}`;
+// ===== INITIALIZATION =====
+function initializeElements() {
+    elements = {
+        // Main interface
+        themeToggle: document.getElementById('themeToggle'),
+        passwordInput: document.getElementById('passwordInput'),
+        strengthSection: document.getElementById('strengthSection'),
+        analysisResults: document.getElementById('analysisResults'),
+        policySection: document.getElementById('policySection'),
+        strengthFill: document.getElementById('strengthFill'),
+        strengthText: document.getElementById('strengthText'),
+        crackTime: document.getElementById('crackTime'),
+        breachStatus: document.getElementById('breachStatus'),
         
-        const config = {
-            method: options.method || 'GET',
-            headers: { ...this.headers, ...options.headers },
-            credentials: 'same-origin',
-            ...options
-        };
-
-        if (options.body && typeof options.body === 'object') {
-            config.body = JSON.stringify(options.body);
-        }
-
-        try {
-            const response = await fetch(url, config);
-            
-            // Update activity timestamp
-            vaultState.updateActivity();
-
-            // Handle different content types
-            const contentType = response.headers.get('Content-Type') || '';
-            
-            let data;
-            if (contentType.includes('application/json')) {
-                data = await response.json();
-            } else {
-                data = await response.text();
-            }
-
-            if (!response.ok) {
-                // Enhanced error handling
-                const errorMessage = data?.error || data?.message || `HTTP ${response.status}: ${response.statusText}`;
-                throw new Error(errorMessage);
-            }
-
-            return data;
-        } catch (error) {
-            console.error(`API Error (${endpoint}):`, error);
-            
-            // Handle network errors
-            if (error.message.includes('Failed to fetch')) {
-                throw new Error('Network connection failed. Please check your internet connection.');
-            }
-            
-            // Handle authentication errors
-            if (error.message.includes('401') || error.message.includes('Unauthorized')) {
-                vaultState.logout();
-                throw new Error('Authentication failed. Please log in again.');
-            }
-            
-            throw error;
-        }
-    }
-
-    // Authentication endpoints
-    async register(username, masterPassword) {
-        return await this.request('/auth/register', {
-            method: 'POST',
-            body: { username, master_password: masterPassword }
-        });
-    }
-
-    async login(username, masterPassword) {
-        const result = await this.request('/auth/login', {
-            method: 'POST',
-            body: { username, master_password: masterPassword }
-        });
+        // Policy icons
+        lengthIcon: document.getElementById('lengthIcon'),
+        lowerIcon: document.getElementById('lowerIcon'),
+        upperIcon: document.getElementById('upperIcon'),
+        digitIcon: document.getElementById('digitIcon'),
+        symbolIcon: document.getElementById('symbolIcon'),
         
-        if (result.success) {
-            vaultState.isAuthenticated = true;
-            vaultState.masterPassword = masterPassword;
-            vaultState.currentUser = username;
-            vaultState.resetSessionTimeout();
-        }
+        // Controls
+        toggleVisibility: document.getElementById('toggleVisibility'),
+        copyPassword: document.getElementById('copyPassword'),
+        clearPassword: document.getElementById('clearPassword'),
+        generatePassword: document.getElementById('generatePassword'),
+        pauseBtn: document.getElementById('pauseBtn'),
         
-        return result;
-    }
-
-    async logout() {
-        try {
-            await this.request('/auth/logout', { method: 'POST' });
-        } catch (error) {
-            console.warn('Logout request failed:', error);
-        }
-        vaultState.logout();
-    }
-
-    // Vault endpoints
-    async getVaultEntries() {
-        const response = await this.request('/api/vault');
-        if (response.entries) {
-            vaultState.vaultEntries = response.entries;
-            return response.entries;
-        }
-        return [];
-    }
-
-    async saveVaultEntry(entry) {
-        const response = await this.request('/api/vault', {
-            method: 'POST',
-            body: { ...entry, master_password: vaultState.masterPassword }
-        });
-        
-        if (response.success) {
-            await this.getVaultEntries(); // Refresh vault
-        }
-        
-        return response;
-    }
-
-    async deleteVaultEntry(entryId) {
-        const response = await this.request(`/api/vault/${entryId}`, {
-            method: 'DELETE'
-        });
-        
-        if (response.success) {
-            await this.getVaultEntries(); // Refresh vault
-        }
-        
-        return response;
-    }
-
-    // Notification endpoints
-    async getNotifications() {
-        try {
-            const response = await this.request('/api/notifications');
-            vaultState.notifications = response.notifications || [];
-            return vaultState.notifications;
-        } catch (error) {
-            console.warn('Failed to fetch notifications:', error);
-            return [];
-        }
-    }
-
-    async acknowledgeNotification(notificationId) {
-        try {
-            return await this.request(`/api/notifications/${notificationId}/acknowledge`, {
-                method: 'POST'
-            });
-        } catch (error) {
-            console.warn('Failed to acknowledge notification:', error);
-            return { success: false };
-        }
-    }
-
-    // Settings endpoints
-    async getSettings() {
-        try {
-            const response = await this.request('/api/settings');
-            if (response.settings) {
-                vaultState.settings = { ...vaultState.settings, ...response.settings };
-            }
-            return vaultState.settings;
-        } catch (error) {
-            console.warn('Failed to fetch settings:', error);
-            return vaultState.settings;
-        }
-    }
-
-    async saveSettings(settings) {
-        try {
-            const response = await this.request('/api/settings', {
-                method: 'POST',
-                body: { settings }
-            });
-            
-            if (response.success) {
-                vaultState.settings = { ...vaultState.settings, ...settings };
-            }
-            
-            return response;
-        } catch (error) {
-            console.warn('Failed to save settings:', error);
-            return { success: false, error: error.message };
-        }
-    }
-}
-
-// Global API instance
-const api = new VaultGuardAPI();
-
-// ===== ENHANCED PASSWORD ANALYSIS ENGINE =====
-class PasswordAnalyzer {
-    constructor() {
-        // Common weak patterns
-        this.weakPatterns = [
-            /^(password|123456|qwerty|abc123|admin|login)/i,
-            /^(.)\1{3,}/,  // Repeated characters
-            /^(012|123|234|345|456|567|678|789|890)+/,  // Sequential numbers
-            /^(abc|bcd|cde|def|efg|fgh|ghi)+/i  // Sequential letters
-        ];
-
-        // Breach indicators (simulated patterns)
-        this.breachPatterns = [
-            /password/i, /123456/, /qwerty/i, /admin/i, /welcome/i,
-            /sunshine/i, /princess/i, /football/i, /baseball/i, /dragon/i
-        ];
-    }
-
-    analyzePassword(password) {
-        const length = password.length;
-        const hasUpper = /[A-Z]/.test(password);
-        const hasLower = /[a-z]/.test(password);
-        const hasNumbers = /\d/.test(password);
-        const hasSymbols = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~`]/.test(password);
-        const hasExtended = /[À-ÿ]/.test(password);
-
-        // Calculate entropy
-        let charset = 0;
-        if (hasLower) charset += 26;
-        if (hasUpper) charset += 26;
-        if (hasNumbers) charset += 10;
-        if (hasSymbols) charset += 32;
-        if (hasExtended) charset += 100;
-
-        const entropy = length > 0 ? Math.log2(Math.pow(charset, length)) : 0;
-        const timeToBreak = this.calculateBreakTime(charset, length);
-
-        // Check for weak patterns
-        const hasWeakPattern = this.weakPatterns.some(pattern => pattern.test(password));
-        const isPotentiallyBreached = this.breachPatterns.some(pattern => pattern.test(password));
-
-        // Advanced strength calculation
-        let score = 0;
-        
-        // Length scoring (0-35 points)
-        if (length >= 16) score += 35;
-        else if (length >= 12) score += 25;
-        else if (length >= 8) score += 15;
-        else if (length >= 6) score += 5;
-
-        // Character variety scoring (0-30 points)
-        if (hasUpper) score += 5;
-        if (hasLower) score += 5;
-        if (hasNumbers) score += 5;
-        if (hasSymbols) score += 10;
-        if (hasExtended) score += 5;
-
-        // Entropy bonus (0-25 points)
-        if (entropy >= 100) score += 25;
-        else if (entropy >= 80) score += 20;
-        else if (entropy >= 60) score += 15;
-        else if (entropy >= 40) score += 10;
-        else if (entropy >= 20) score += 5;
-
-        // Pattern penalties (-30 points max)
-        if (hasWeakPattern) score -= 20;
-        if (isPotentiallyBreached) score -= 10;
-        if (this.hasRepeatedPatterns(password)) score -= 10;
-        if (this.isCommonKeyboardPattern(password)) score -= 15;
-
-        // Bonus points (0-10 points)
-        if (length >= 20) score += 5;
-        if (this.hasGoodRandomness(password)) score += 5;
-
-        score = Math.max(0, Math.min(100, score));
-
-        return {
-            score,
-            length,
-            entropy: Math.round(entropy),
-            timeToBreak,
-            characteristics: {
-                hasUpper,
-                hasLower,
-                hasNumbers,
-                hasSymbols,
-                hasExtended,
-                hasWeakPattern,
-                isPotentiallyBreached
-            },
-            strength: this.getStrengthLevel(score),
-            recommendations: this.getRecommendations(password, score)
-        };
-    }
-
-    calculateBreakTime(charset, length) {
-        if (charset === 0 || length === 0) return 'Instantly';
-        
-        const combinations = Math.pow(charset, length);
-        const attemptsPerSecond = 1e9; // Assume 1 billion attempts per second
-        const secondsToBreak = combinations / (attemptsPerSecond * 2); // Divided by 2 for average time
-        
-        if (secondsToBreak < 1) return 'Instantly';
-        if (secondsToBreak < 60) return `${Math.round(secondsToBreak)} seconds`;
-        if (secondsToBreak < 3600) return `${Math.round(secondsToBreak / 60)} minutes`;
-        if (secondsToBreak < 86400) return `${Math.round(secondsToBreak / 3600)} hours`;
-        if (secondsToBreak < 31536000) return `${Math.round(secondsToBreak / 86400)} days`;
-        if (secondsToBreak < 31536000000) return `${Math.round(secondsToBreak / 31536000)} years`;
-        return 'Centuries';
-    }
-
-    hasRepeatedPatterns(password) {
-        // Check for repeated substrings
-        for (let i = 1; i <= password.length / 2; i++) {
-            const pattern = password.substring(0, i);
-            const repeated = pattern.repeat(Math.floor(password.length / i));
-            if (password.startsWith(repeated) && repeated.length >= password.length * 0.6) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    isCommonKeyboardPattern(password) {
-        const keyboardPatterns = [
-            'qwertyuiop', 'asdfghjkl', 'zxcvbnm',
-            '1234567890', '!@#$%^&*()',
-            'qwerty', 'asdf', 'zxcv'
-        ];
-        
-        const lowerPassword = password.toLowerCase();
-        return keyboardPatterns.some(pattern => 
-            lowerPassword.includes(pattern) || 
-            lowerPassword.includes(pattern.split('').reverse().join(''))
-        );
-    }
-
-    hasGoodRandomness(password) {
-        // Simple randomness check
-        const chars = password.split('');
-        const uniqueChars = new Set(chars).size;
-        return uniqueChars >= password.length * 0.7;
-    }
-
-    getStrengthLevel(score) {
-        if (score >= 90) return 'fortress';
-        if (score >= 80) return 'military';
-        if (score >= 70) return 'strong';
-        if (score >= 50) return 'good';
-        if (score >= 30) return 'fair';
-        if (score >= 15) return 'weak';
-        return 'critical';
-    }
-
-    getRecommendations(password, score) {
-        const recommendations = [];
-        const analysis = this.analyzePassword(password);
-        
-        if (password.length < 12) {
-            recommendations.push('Increase length to at least 12 characters');
-        }
-        
-        if (!analysis.characteristics.hasUpper) {
-            recommendations.push('Add uppercase letters (A-Z)');
-        }
-        
-        if (!analysis.characteristics.hasLower) {
-            recommendations.push('Add lowercase letters (a-z)');
-        }
-        
-        if (!analysis.characteristics.hasNumbers) {
-            recommendations.push('Add numbers (0-9)');
-        }
-        
-        if (!analysis.characteristics.hasSymbols) {
-            recommendations.push('Add special characters (!@#$%^&*)');
-        }
-        
-        if (analysis.characteristics.hasWeakPattern) {
-            recommendations.push('Avoid common passwords and patterns');
-        }
-        
-        if (analysis.characteristics.isPotentiallyBreached) {
-            recommendations.push('This password may have been in data breaches');
-        }
-        
-        if (this.hasRepeatedPatterns(password)) {
-            recommendations.push('Avoid repeated patterns and sequences');
-        }
-        
-        if (score < 70) {
-            recommendations.push('Consider using a passphrase or password manager');
-        }
-        
-        return recommendations;
-    }
-}
-
-// Global analyzer instance
-const passwordAnalyzer = new PasswordAnalyzer();
-
-// ===== ENHANCED PASSWORD GENERATOR =====
-class PasswordGenerator {
-    constructor() {
-        this.charsets = {
-            lowercase: 'abcdefghijklmnopqrstuvwxyz',
-            uppercase: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
-            numbers: '0123456789',
-            symbols: '!@#$%^&*()_+-=[]{}|;:,.<>?',
-            extended: 'ÀÁÂÃÄÅàáâãäåÇçÈÉÊËèéêëÌÍÎÏìíîïÒÓÔÕÖòóôõöÙÚÛÜùúûüÝýÿ'
-        };
-    }
-
-    generatePassword(options = {}) {
-        const {
-            length = 16,
-            includeLowercase = true,
-            includeUppercase = true,
-            includeNumbers = true,
-            includeSymbols = true,
-            includeExtended = false,
-            excludeSimilar = true,
-            excludeAmbiguous = true
-        } = options;
-
-        let charset = '';
-        
-        if (includeLowercase) charset += this.charsets.lowercase;
-        if (includeUppercase) charset += this.charsets.uppercase;
-        if (includeNumbers) charset += this.charsets.numbers;
-        if (includeSymbols) charset += this.charsets.symbols;
-        if (includeExtended) charset += this.charsets.extended;
-
-        if (!charset) {
-            throw new Error('At least one character type must be selected');
-        }
-
-        // Remove similar/ambiguous characters if requested
-        if (excludeSimilar) {
-            charset = charset.replace(/[il1Lo0O]/g, '');
-        }
-        
-        if (excludeAmbiguous) {
-            charset = charset.replace(/[{}[\]()\/\\'"~,;<>.]/g, '');
-        }
-
-        // Ensure at least one character from each selected type
-        let password = '';
-        const requiredChars = [];
-        
-        if (includeLowercase) requiredChars.push(this.getRandomChar(this.charsets.lowercase, excludeSimilar, excludeAmbiguous));
-        if (includeUppercase) requiredChars.push(this.getRandomChar(this.charsets.uppercase, excludeSimilar, excludeAmbiguous));
-        if (includeNumbers) requiredChars.push(this.getRandomChar(this.charsets.numbers, excludeSimilar, excludeAmbiguous));
-        if (includeSymbols) requiredChars.push(this.getRandomChar(this.charsets.symbols, excludeSimilar, excludeAmbiguous));
-        if (includeExtended) requiredChars.push(this.getRandomChar(this.charsets.extended, excludeSimilar, excludeAmbiguous));
-
-        // Add required characters
-        for (const char of requiredChars) {
-            password += char;
-        }
-
-        // Fill the rest randomly
-        for (let i = password.length; i < length; i++) {
-            password += charset.charAt(Math.floor(Math.random() * charset.length));
-        }
-
-        // Shuffle the password to avoid predictable patterns
-        return this.shuffleString(password);
-    }
-
-    getRandomChar(charset, excludeSimilar = false, excludeAmbiguous = false) {
-        let filteredCharset = charset;
-        
-        if (excludeSimilar) {
-            filteredCharset = filteredCharset.replace(/[il1Lo0O]/g, '');
-        }
-        
-        if (excludeAmbiguous) {
-            filteredCharset = filteredCharset.replace(/[{}[\]()\/\\'"~,;<>.]/g, '');
-        }
-        
-        return filteredCharset.charAt(Math.floor(Math.random() * filteredCharset.length));
-    }
-
-    shuffleString(str) {
-        const array = str.split('');
-        for (let i = array.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [array[i], array[j]] = [array[j], array[i]];
-        }
-        return array.join('');
-    }
-}
-
-// Global generator instance
-const passwordGenerator = new PasswordGenerator();
-
-// ===== ENHANCED UI MANAGER =====
-class UIManager {
-    constructor() {
-        this.modals = new Map();
-        this.notifications = [];
-    }
-
-    initializeEventListeners() {
-        // Theme toggle
-        const themeToggle = document.querySelector('.theme-toggle');
-        if (themeToggle) {
-            themeToggle.addEventListener('click', this.toggleTheme.bind(this));
-        }
-
-        // Password input real-time analysis
-        const passwordInput = document.querySelector('#password');
-        if (passwordInput) {
-            passwordInput.addEventListener('input', this.handlePasswordInput.bind(this));
-        }
-
-        // Generator controls
-        this.initializeGeneratorControls();
+        // Generator page
+        lengthSlider: document.getElementById('lengthSlider'),
+        lengthValue: document.getElementById('lengthValue'),
+        generateBtn: document.getElementById('generateBtn'),
+        generatedPassword: document.getElementById('generatedPassword'),
+        copyGenerated: document.getElementById('copyGenerated'),
+        useGenerated: document.getElementById('useGenerated'),
+        includeUpper: document.getElementById('includeUpper'),
+        includeLower: document.getElementById('includeLower'),
+        includeNumbers: document.getElementById('includeNumbers'),
+        includeSymbols: document.getElementById('includeSymbols'),
+        excludeAmbiguous: document.getElementById('excludeAmbiguous'),
         
         // Authentication
-        this.initializeAuthModals();
+        authModal: document.getElementById('authModal'),
+        authForm: document.getElementById('authForm'),
+        authTitle: document.getElementById('authTitle'),
+        authSubmit: document.getElementById('authSubmit'),
+        authUsername: document.getElementById('authUsername'),
+        authPassword: document.getElementById('authPassword'),
+        authEmail: document.getElementById('authEmail'),
+        authPhone: document.getElementById('authPhone'),
+        loginBtn: document.getElementById('loginBtn'),
+        closeModal: document.getElementById('closeModal'),
         
-        // Vault controls
-        this.initializeVaultControls();
+        // Vault management
+        vaultList: document.getElementById('vaultList'),
+        savePasswordBtn: document.getElementById('save-password-btn'),
+        vaultTitle: document.getElementById('vault-title'),
+        siteName: document.getElementById('site-name'),
+        vaultUsername: document.getElementById('vault-username'),
+        vaultPassword: document.getElementById('vault-password'),
+        vaultCategory: document.getElementById('vault-category'),
+        vaultNotes: document.getElementById('vault-notes'),
+        vaultTags: document.getElementById('vault-tags'),
         
-        // Settings
-        this.initializeSettingsModal();
+        // Phase 1: Enhanced search and filters
+        vaultSearch: document.getElementById('vault-search'),
+        vaultSort: document.getElementById('vault-sort'),
+        categoryFilter: document.getElementById('category-filter'),
+        favoritesFilter: document.getElementById('favorites-filter'),
         
-        // Global keyboard shortcuts
-        this.initializeKeyboardShortcuts();
+        // Phase 1: Notification system
+        notificationsBtn: document.getElementById('notificationsBtn'),
+        notificationModal: document.getElementById('notificationModal'),
+        notificationsList: document.getElementById('notificationsList'),
+        notificationBadge: document.getElementById('notificationBadge'),
+        
+        // Phase 1: Settings
+        settingsBtn: document.getElementById('settingsBtn'),
+        settingsModal: document.getElementById('settingsModal'),
+        notificationSettings: document.getElementById('notificationSettings')
+    };
+}
 
-        // Activity tracking
-        document.addEventListener('click', () => vaultState.updateActivity());
-        document.addEventListener('keypress', () => vaultState.updateActivity());
-    }
-
-    toggleTheme() {
-        const currentTheme = document.documentElement.getAttribute('data-theme');
-        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+async function initialize() {
+    try {
+        const startTime = performance.now();
         
-        document.documentElement.setAttribute('data-theme', newTheme);
-        localStorage.setItem('theme', newTheme);
+        initializeElements();
+        initializeTheme();
+        initializeEventListeners();
         
-        // Update theme toggle icon
-        const themeToggle = document.querySelector('.theme-toggle');
-        if (themeToggle) {
-            themeToggle.innerHTML = newTheme === 'light' ? '🌙' : '☀️';
+        // Check authentication status
+        await checkAuthenticationStatus();
+        
+        // Load user data if authenticated
+        if (currentUserSalt) {
+            await loadVaultData();
+            await loadUserNotifications();
         }
         
-        showNotification(`Switched to ${newTheme} theme`, 'success');
-    }
-
-    handlePasswordInput(event) {
-        const password = event.target.value;
-        this.updatePasswordStrength(password);
-    }
-
-    updatePasswordStrength(password) {
-        if (!password) {
-            this.hideStrengthIndicator();
-            return;
-        }
-
-        const analysis = passwordAnalyzer.analyzePassword(password);
-        this.showStrengthIndicator(analysis);
-    }
-
-    showStrengthIndicator(analysis) {
-        let strengthSection = document.querySelector('.strength-section');
+        // Initialize current page features
+        initializeCurrentPage();
         
-        if (!strengthSection) {
-            strengthSection = this.createStrengthSection();
-        }
-
-        strengthSection.style.display = 'block';
+        const loadTime = performance.now() - startTime;
+        performanceMetrics.pageLoadTime = loadTime;
         
-        // Update strength bar
-        const strengthFill = strengthSection.querySelector('.strength-fill');
-        const strengthText = strengthSection.querySelector('.strength-text');
+        console.log(`VaultGuard initialized in ${loadTime.toFixed(2)}ms`);
+        showNotification('VaultGuard loaded successfully', 'success');
         
-        if (strengthFill && strengthText) {
-            strengthFill.style.width = `${analysis.score}%`;
-            strengthFill.className = `strength-fill ${analysis.strength}`;
-            strengthText.className = `strength-text ${analysis.strength}`;
-            strengthText.textContent = analysis.strength.toUpperCase();
-        }
-
-        // Update analysis metrics
-        this.updateAnalysisMetrics(analysis);
-        
-        // Update policy checklist
-        this.updatePolicyChecklist(analysis);
+    } catch (error) {
+        console.error('Initialization error:', error);
+        showNotification('Failed to initialize VaultGuard', 'error');
     }
+}
 
-    createStrengthSection() {
-        const passwordGroup = document.querySelector('.password-input-group');
-        if (!passwordGroup) return null;
-
-        const strengthSection = document.createElement('div');
-        strengthSection.className = 'strength-section';
-        strengthSection.innerHTML = `
-            <div class="strength-label">
-                <span class="strength-text">CHECKING</span>
-                <span class="strength-percentage">0%</span>
-            </div>
-            <div class="strength-bar">
-                <div class="strength-fill" style="width: 0%"></div>
-            </div>
-            <div class="analysis-grid">
-                <div class="analysis-item">
-                    <span class="analysis-icon">🔢</span>
-                    <div class="analysis-label">Length</div>
-                    <div class="analysis-value length-value">0</div>
-                </div>
-                <div class="analysis-item">
-                    <span class="analysis-icon">⚡</span>
-                    <div class="analysis-label">Entropy</div>
-                    <div class="analysis-value entropy-value">0 bits</div>
-                </div>
-                <div class="analysis-item">
-                    <span class="analysis-icon">⏱️</span>
-                    <div class="analysis-label">Crack Time</div>
-                    <div class="analysis-value time-value">Instantly</div>
-                </div>
-                <div class="analysis-item">
-                    <span class="analysis-icon">🎯</span>
-                    <div class="analysis-label">Score</div>
-                    <div class="analysis-value score-value">0/100</div>
-                </div>
-            </div>
-            <ul class="policy-list">
-                <li class="policy-item">
-                    <div class="policy-icon invalid">✗</div>
-                    <span>At least 8 characters</span>
-                </li>
-                <li class="policy-item">
-                    <div class="policy-icon invalid">✗</div>
-                    <span>Contains uppercase letters</span>
-                </li>
-                <li class="policy-item">
-                    <div class="policy-icon invalid">✗</div>
-                    <span>Contains lowercase letters</span>
-                </li>
-                <li class="policy-item">
-                    <div class="policy-icon invalid">✗</div>
-                    <span>Contains numbers</span>
-                </li>
-                <li class="policy-item">
-                    <div class="policy-icon invalid">✗</div>
-                    <span>Contains special characters</span>
-                </li>
-                <li class="policy-item">
-                    <div class="policy-icon invalid">✗</div>
-                    <span>No common patterns</span>
-                </li>
-            </ul>
-        `;
-
-        passwordGroup.appendChild(strengthSection);
-        return strengthSection;
+// ===== THEME MANAGEMENT =====
+function initializeTheme() {
+    document.body.setAttribute('data-theme', themePreference);
+    updateThemeToggle();
+    
+    if (elements.themeToggle) {
+        elements.themeToggle.addEventListener('click', toggleTheme);
     }
+}
 
-    updateAnalysisMetrics(analysis) {
-        const lengthValue = document.querySelector('.length-value');
-        const entropyValue = document.querySelector('.entropy-value');
-        const timeValue = document.querySelector('.time-value');
-        const scoreValue = document.querySelector('.score-value');
-        const strengthPercentage = document.querySelector('.strength-percentage');
+function toggleTheme() {
+    themePreference = themePreference === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('theme', themePreference);
+    document.body.setAttribute('data-theme', themePreference);
+    updateThemeToggle();
+    showNotification(`Switched to ${themePreference} theme`, 'info');
+}
 
-        if (lengthValue) lengthValue.textContent = analysis.length;
-        if (entropyValue) entropyValue.textContent = `${analysis.entropy} bits`;
-        if (timeValue) timeValue.textContent = analysis.timeToBreak;
-        if (scoreValue) scoreValue.textContent = `${analysis.score}/100`;
-        if (strengthPercentage) strengthPercentage.textContent = `${analysis.score}%`;
+function updateThemeToggle() {
+    if (elements.themeToggle) {
+        elements.themeToggle.textContent = themePreference === 'dark' ? '🌙' : '☀️';
+        elements.themeToggle.title = `Switch to ${themePreference === 'dark' ? 'light' : 'dark'} theme`;
     }
+}
 
-    updatePolicyChecklist(analysis) {
-        const policies = document.querySelectorAll('.policy-item');
-        const { characteristics } = analysis;
+// ===== EVENT LISTENERS =====
+function initializeEventListeners() {
+    // Password analyzer
+    if (elements.passwordInput) {
+        elements.passwordInput.addEventListener('input', debounce((e) => {
+            analyzePassword(e.target.value);
+        }, 300));
         
-        const checks = [
-            analysis.length >= 8,
-            characteristics.hasUpper,
-            characteristics.hasLower,
-            characteristics.hasNumbers,
-            characteristics.hasSymbols,
-            !characteristics.hasWeakPattern
-        ];
-
-        policies.forEach((policy, index) => {
-            const icon = policy.querySelector('.policy-icon');
-            if (icon) {
-                if (checks[index]) {
-                    icon.className = 'policy-icon valid';
-                    icon.textContent = '✓';
-                } else {
-                    icon.className = 'policy-icon invalid';
-                    icon.textContent = '✗';
-                }
-            }
+        elements.passwordInput.addEventListener('paste', (e) => {
+            setTimeout(() => analyzePassword(e.target.value), 10);
         });
     }
 
-    hideStrengthIndicator() {
-        const strengthSection = document.querySelector('.strength-section');
-        if (strengthSection) {
-            strengthSection.style.display = 'none';
-        }
+    // Password controls
+    if (elements.toggleVisibility) {
+        elements.toggleVisibility.addEventListener('click', togglePasswordVisibility);
+    }
+    if (elements.copyPassword) {
+        elements.copyPassword.addEventListener('click', copyPasswordToClipboard);
+    }
+    if (elements.clearPassword) {
+        elements.clearPassword.addEventListener('click', clearPasswordInput);
+    }
+    if (elements.generatePassword) {
+        elements.generatePassword.addEventListener('click', generateAndAnalyzePassword);
+    }
+    if (elements.pauseBtn) {
+        elements.pauseBtn.addEventListener('click', toggleAnalysis);
     }
 
-    initializeGeneratorControls() {
-        // Password generation button
-        const generateBtn = document.querySelector('#generatePassword');
-        if (generateBtn) {
-            generateBtn.addEventListener('click', this.generatePassword.bind(this));
-        }
-
-        // Generator sliders and checkboxes
-        const lengthSlider = document.querySelector('#length');
-        if (lengthSlider) {
-            lengthSlider.addEventListener('input', (e) => {
-                const value = document.querySelector('#lengthValue');
-                if (value) value.textContent = e.target.value;
-            });
-        }
-
-        // Input action buttons
-        this.initializeInputActions();
+    // Generator controls
+    if (elements.lengthSlider) {
+        elements.lengthSlider.addEventListener('input', (e) => {
+            updateLengthDisplay(parseInt(e.target.value));
+        });
+    }
+    if (elements.generateBtn) {
+        elements.generateBtn.addEventListener('click', generateNewPassword);
+    }
+    if (elements.copyGenerated) {
+        elements.copyGenerated.addEventListener('click', copyGeneratedPassword);
+    }
+    if (elements.useGenerated) {
+        elements.useGenerated.addEventListener('click', useGeneratedPassword);
     }
 
-    initializeInputActions() {
-        // Copy button
-        const copyBtn = document.querySelector('#copyPassword');
-        if (copyBtn) {
-            copyBtn.addEventListener('click', this.copyPassword.bind(this));
+    // Generator checkboxes
+    ['includeUpper', 'includeLower', 'includeNumbers', 'includeSymbols', 'excludeAmbiguous'].forEach(id => {
+        const element = elements[id];
+        if (element) {
+            element.addEventListener('change', updatePasswordGeneratorSettings);
         }
+    });
 
-        // Show/Hide button
-        const toggleBtn = document.querySelector('#togglePassword');
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', this.togglePasswordVisibility.bind(this));
-        }
-
-        // Clear button
-        const clearBtn = document.querySelector('#clearPassword');
-        if (clearBtn) {
-            clearBtn.addEventListener('click', this.clearPassword.bind(this));
-        }
-
-        // Generate button
-        const quickGenBtn = document.querySelector('#quickGenerate');
-        if (quickGenBtn) {
-            quickGenBtn.addEventListener('click', this.quickGenerate.bind(this));
-        }
-
-        // Analyze button
-        const analyzeBtn = document.querySelector('#analyzePassword');
-        if (analyzeBtn) {
-            analyzeBtn.addEventListener('click', this.analyzeCurrentPassword.bind(this));
-        }
+    // Authentication
+    if (elements.loginBtn) {
+        elements.loginBtn.addEventListener('click', openAuthModal);
+    }
+    if (elements.closeModal) {
+        elements.closeModal.addEventListener('click', closeAuthModal);
+    }
+    if (elements.authForm) {
+        elements.authForm.addEventListener('submit', handleAuth);
     }
 
-    async copyPassword() {
-        const passwordInput = document.querySelector('#password');
-        if (!passwordInput || !passwordInput.value) {
-            showNotification('No password to copy', 'warning');
-            return;
-        }
-
-        try {
-            await navigator.clipboard.writeText(passwordInput.value);
-            showNotification('Password copied to clipboard', 'success');
-            
-            // Security: Clear clipboard after 45 seconds
-            setTimeout(async () => {
-                try {
-                    await navigator.clipboard.writeText('');
-                } catch (error) {
-                    // Ignore clipboard clear errors
-                }
-            }, 45000);
-        } catch (error) {
-            // Fallback for older browsers
-            passwordInput.select();
-            document.execCommand('copy');
-            showNotification('Password copied to clipboard', 'success');
-        }
+    // Vault management
+    if (elements.savePasswordBtn) {
+        elements.savePasswordBtn.addEventListener('click', savePassword);
     }
 
-    togglePasswordVisibility() {
-        const passwordInput = document.querySelector('#password');
-        const toggleBtn = document.querySelector('#togglePassword');
+    // Phase 1: Enhanced search and filters
+    if (elements.vaultSearch) {
+        elements.vaultSearch.addEventListener('input', debounce((e) => {
+            filterVaultEntries(e.target.value);
+        }, 300));
+    }
+    if (elements.vaultSort) {
+        elements.vaultSort.addEventListener('change', (e) => {
+            sortVaultEntries(e.target.value);
+        });
+    }
+    if (elements.categoryFilter) {
+        elements.categoryFilter.addEventListener('change', filterByCategory);
+    }
+    if (elements.favoritesFilter) {
+        elements.favoritesFilter.addEventListener('change', filterByFavorites);
+    }
+
+    // Phase 1: Notifications
+    if (elements.notificationsBtn) {
+        elements.notificationsBtn.addEventListener('click', toggleNotifications);
+    }
+
+    // Phase 1: Settings
+    if (elements.settingsBtn) {
+        elements.settingsBtn.addEventListener('click', toggleSettings);
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', handleKeyboardShortcuts);
+    
+    // Page visibility handling
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+}
+
+// ===== AUTHENTICATION =====
+async function checkAuthenticationStatus() {
+    try {
+        const response = await fetch('/api/me');
+        const data = await response.json();
         
-        if (!passwordInput || !toggleBtn) return;
+        if (data.success && data.authenticated) {
+            currentUserSalt = data.salt;
+            updateUIForAuthenticatedUser(data);
+        } else {
+            updateUIForUnauthenticatedUser();
+        }
+    } catch (error) {
+        console.error('Auth status check failed:', error);
+        updateUIForUnauthenticatedUser();
+    }
+}
 
-        if (passwordInput.type === 'password') {
-            passwordInput.type = 'text';
-            toggleBtn.innerHTML = '👁️‍🗨️';
-            toggleBtn.title = 'Hide password';
+function updateUIForAuthenticatedUser(userData) {
+    // Update UI elements for authenticated users
+    const usernameElements = document.querySelectorAll('.current-username');
+    usernameElements.forEach(el => el.textContent = userData.username);
+    
+    // Update notification badge
+    if (userData.alerts && userData.alerts.length > 0) {
+        updateNotificationBadge(userData.alerts.length);
+    }
+    
+    // Show authenticated sections
+    const authSections = document.querySelectorAll('.auth-required');
+    authSections.forEach(section => section.style.display = 'block');
+    
+    const loginBtns = document.querySelectorAll('.login-btn');
+    loginBtns.forEach(btn => btn.style.display = 'none');
+}
+
+function updateUIForUnauthenticatedUser() {
+    currentUserSalt = null;
+    masterPasswordCache = null;
+    
+    const authSections = document.querySelectorAll('.auth-required');
+    authSections.forEach(section => section.style.display = 'none');
+    
+    const loginBtns = document.querySelectorAll('.login-btn');
+    loginBtns.forEach(btn => btn.style.display = 'block');
+}
+
+function openAuthModal() {
+    if (elements.authModal) {
+        elements.authModal.classList.add('show');
+        setAuthMode(isLoginMode);
+        
+        setTimeout(() => {
+            if (elements.authUsername) {
+                elements.authUsername.focus();
+            }
+        }, 100);
+    }
+}
+
+function closeAuthModal() {
+    if (elements.authModal) {
+        elements.authModal.classList.remove('show');
+        if (elements.authForm) {
+            elements.authForm.reset();
+        }
+    }
+}
+
+function setAuthMode(loginMode) {
+    isLoginMode = loginMode;
+    
+    if (elements.authTitle && elements.authSubmit) {
+        if (isLoginMode) {
+            elements.authTitle.textContent = '🔐 VaultGuard Login';
+            elements.authSubmit.textContent = 'Login';
             
-            // Auto-hide after 10 seconds for security
+            // Hide registration fields
+            if (elements.authEmail) elements.authEmail.parentElement.style.display = 'none';
+            if (elements.authPhone) elements.authPhone.parentElement.style.display = 'none';
+        } else {
+            elements.authTitle.textContent = '🛡️ Create Account';
+            elements.authSubmit.textContent = 'Register';
+            
+            // Show registration fields
+            if (elements.authEmail) elements.authEmail.parentElement.style.display = 'block';
+            if (elements.authPhone) elements.authPhone.parentElement.style.display = 'block';
+        }
+    }
+}
+
+async function handleAuth(event) {
+    event.preventDefault();
+    
+    const username = elements.authUsername?.value.trim();
+    const password = elements.authPassword?.value;
+    const email = elements.authEmail?.value.trim();
+    const phone = elements.authPhone?.value.trim();
+    
+    if (!username || !password) {
+        showNotification('Please fill in all required fields', 'error');
+        return;
+    }
+    
+    const endpoint = isLoginMode ? '/api/login' : '/api/register';
+    const payload = { username, password };
+    
+    if (!isLoginMode) {
+        if (email) payload.email = email;
+        if (phone) payload.phone = phone;
+    }
+    
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            currentUserSalt = data.salt;
+            masterPasswordCache = password;
+            showNotification(data.message, 'success');
+            closeAuthModal();
+            
             setTimeout(() => {
-                if (passwordInput.type === 'text') {
-                    passwordInput.type = 'password';
-                    toggleBtn.innerHTML = '👁️';
-                    toggleBtn.title = 'Show password';
-                }
-            }, 10000);
+                window.location.reload();
+            }, 1500);
         } else {
-            passwordInput.type = 'password';
-            toggleBtn.innerHTML = '👁️';
-            toggleBtn.title = 'Show password';
+            showNotification(data.message, 'error');
         }
+    } catch (error) {
+        console.error('Auth error:', error);
+        showNotification('Authentication failed', 'error');
+    }
+}
+
+// ===== PASSWORD ANALYSIS =====
+function analyzePassword(password) {
+    performanceMetrics.analysisCount++;
+    
+    if (!password || !analysisEnabled) {
+        hideAnalysisSection();
+        return;
     }
 
-    clearPassword() {
-        const passwordInput = document.querySelector('#password');
-        if (passwordInput) {
-            passwordInput.value = '';
-            passwordInput.dispatchEvent(new Event('input'));
-            showNotification('Password cleared', 'info');
-        }
-    }
+    showAnalysisSection();
+    
+    // Calculate strength
+    const strength = calculatePasswordStrength(password);
+    updateStrengthMeter(strength);
+    updatePasswordPolicyIcons(password);
+    
+    // Check against breach database
+    checkPasswordBreach(password);
+}
 
-    quickGenerate() {
-        const password = passwordGenerator.generatePassword({
-            length: 16,
-            includeLowercase: true,
-            includeUppercase: true,
-            includeNumbers: true,
-            includeSymbols: true
+function calculatePasswordStrength(password) {
+    if (!password) return { score: 0, level: 'None', color: '#6c757d' };
+    
+    let score = 0;
+    let bonuses = [];
+    let penalties = [];
+    
+    // Length scoring
+    if (password.length >= 8) { score += 20; bonuses.push('Minimum length'); }
+    if (password.length >= 12) { score += 15; bonuses.push('Good length'); }
+    if (password.length >= 16) { score += 15; bonuses.push('Excellent length'); }
+    
+    // Character variety
+    if (/[a-z]/.test(password)) { score += 10; bonuses.push('Lowercase'); }
+    if (/[A-Z]/.test(password)) { score += 10; bonuses.push('Uppercase'); }
+    if (/[0-9]/.test(password)) { score += 10; bonuses.push('Numbers'); }
+    if (/[^A-Za-z0-9]/.test(password)) { score += 20; bonuses.push('Symbols'); }
+    
+    // Penalty checks
+    if (password.length < 8) {
+        score -= 30;
+        penalties.push('Too short');
+    }
+    if (/^[a-zA-Z]+$/.test(password)) {
+        score -= 20;
+        penalties.push('Only letters');
+    }
+    if (/(.)\1{2,}/.test(password)) {
+        score -= 15;
+        penalties.push('Repeated characters');
+    }
+    if (/123|abc|qwe/i.test(password)) {
+        score -= 20;
+        penalties.push('Common patterns');
+    }
+    
+    score = Math.max(0, Math.min(100, score));
+    
+    // Determine level and color
+    let level, color;
+    if (score >= 90) { level = 'Fortress'; color = '#2ed573'; }
+    else if (score >= 75) { level = 'Very Strong'; color = '#26d0ce'; }
+    else if (score >= 60) { level = 'Strong'; color = '#3742fa'; }
+    else if (score >= 40) { level = 'Good'; color = '#ffa502'; }
+    else if (score >= 20) { level = 'Weak'; color = '#ff6348'; }
+    else { level = 'Very Weak'; color = '#ff4757'; }
+    
+    return { score, level, color, bonuses, penalties };
+}
+
+function updateStrengthMeter(strength) {
+    if (elements.strengthFill) {
+        elements.strengthFill.style.width = strength.score + '%';
+        elements.strengthFill.style.backgroundColor = strength.color;
+    }
+    
+    if (elements.strengthText) {
+        elements.strengthText.textContent = `${strength.level} (${strength.score}%)`;
+        elements.strengthText.style.color = strength.color;
+    }
+}
+
+function updatePasswordPolicyIcons(password) {
+    const checks = [
+        { element: elements.lengthIcon, valid: password.length >= 12, label: '12+ characters' },
+        { element: elements.lowerIcon, valid: /[a-z]/.test(password), label: 'Lowercase' },
+        { element: elements.upperIcon, valid: /[A-Z]/.test(password), label: 'Uppercase' },
+        { element: elements.digitIcon, valid: /[0-9]/.test(password), label: 'Numbers' },
+        { element: elements.symbolIcon, valid: /[^A-Za-z0-9]/.test(password), label: 'Symbols' }
+    ];
+    
+    checks.forEach(check => {
+        if (check.element) {
+            check.element.className = check.valid ? 'policy-icon valid' : 'policy-icon invalid';
+            check.element.textContent = check.valid ? '✓' : '✗';
+            check.element.title = `${check.label}: ${check.valid ? 'Yes' : 'No'}`;
+        }
+    });
+}
+
+async function checkPasswordBreach(password) {
+    if (!password) return;
+    
+    try {
+        performanceMetrics.apiCallCount++;
+        
+        const response = await fetch('/api/check_password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ password })
         });
         
-        const passwordInput = document.querySelector('#password');
-        if (passwordInput) {
-            passwordInput.value = password;
-            passwordInput.dispatchEvent(new Event('input'));
-            showNotification('Password generated', 'success');
-        }
-    }
-
-    analyzeCurrentPassword() {
-        const passwordInput = document.querySelector('#password');
-        if (!passwordInput || !passwordInput.value) {
-            showNotification('Enter a password to analyze', 'warning');
-            return;
-        }
-
-        this.updatePasswordStrength(passwordInput.value);
-        showNotification('Password analyzed', 'info');
-    }
-
-    generatePassword() {
-        try {
-            // Get generator options
-            const options = this.getGeneratorOptions();
+        const data = await response.json();
+        
+        if (data.success && elements.breachStatus) {
+            if (data.breached) {
+                elements.breachStatus.innerHTML = `
+                    <span class="breach-warning">
+                        🚨 BREACHED: Found in ${data.count.toLocaleString()} breaches!
+                    </span>
+                `;
+                elements.breachStatus.className = 'breach-status breached';
+            } else {
+                elements.breachStatus.innerHTML = `
+                    <span class="breach-safe">
+                        ✅ SECURE: Not found in known breaches
+                    </span>
+                `;
+                elements.breachStatus.className = 'breach-status safe';
+            }
             
-            const password = passwordGenerator.generatePassword(options);
-
-            // Update password input
-            const passwordInput = document.querySelector('#password');
-            if (passwordInput) {
-                passwordInput.value = password;
-                passwordInput.dispatchEvent(new Event('input'));
+            // Update crack time
+            if (elements.crackTime && data.crack_time) {
+                elements.crackTime.textContent = `Crack time: ${data.crack_time}`;
             }
-
-            showNotification('Password generated successfully', 'success');
-        } catch (error) {
-            showNotification(`Generation failed: ${error.message}`, 'error');
+        }
+    } catch (error) {
+        console.error('Breach check failed:', error);
+        if (elements.breachStatus) {
+            elements.breachStatus.innerHTML = '<span class="breach-unknown">⚠️ Breach check unavailable</span>';
         }
     }
+}
 
-    getGeneratorOptions() {
-        const lengthSlider = document.querySelector('#length');
-        const includeLowercase = document.querySelector('#includeLowercase');
-        const includeUppercase = document.querySelector('#includeUppercase');
-        const includeNumbers = document.querySelector('#includeNumbers');
-        const includeSymbols = document.querySelector('#includeSymbols');
-        const excludeSimilar = document.querySelector('#excludeSimilar');
-        const excludeAmbiguous = document.querySelector('#excludeAmbiguous');
+function showAnalysisSection() {
+    [elements.strengthSection, elements.analysisResults, elements.policySection].forEach(section => {
+        if (section) {
+            section.style.display = 'block';
+        }
+    });
+}
 
-        return {
-            length: lengthSlider ? parseInt(lengthSlider.value) : 16,
-            includeLowercase: includeLowercase ? includeLowercase.checked : true,
-            includeUppercase: includeUppercase ? includeUppercase.checked : true,
-            includeNumbers: includeNumbers ? includeNumbers.checked : true,
-            includeSymbols: includeSymbols ? includeSymbols.checked : true,
-            excludeSimilar: excludeSimilar ? excludeSimilar.checked : true,
-            excludeAmbiguous: excludeAmbiguous ? excludeAmbiguous.checked : true
-        };
+function hideAnalysisSection() {
+    [elements.strengthSection, elements.analysisResults, elements.policySection].forEach(section => {
+        if (section) {
+            section.style.display = 'none';
+        }
+    });
+}
+
+// ===== PASSWORD CONTROLS =====
+function togglePasswordVisibility() {
+    if (!elements.passwordInput || !elements.toggleVisibility) return;
+    
+    const isPassword = elements.passwordInput.type === 'password';
+    elements.passwordInput.type = isPassword ? 'text' : 'password';
+    elements.toggleVisibility.textContent = isPassword ? '🙈' : '👁️';
+    elements.toggleVisibility.title = isPassword ? 'Hide password' : 'Show password';
+}
+
+async function copyPasswordToClipboard() {
+    if (!elements.passwordInput?.value) {
+        showNotification('No password to copy', 'warning');
+        return;
     }
-
-    initializeAuthModals() {
-        // Login/Register buttons
-        const loginBtn = document.querySelector('#loginBtn');
-        const registerBtn = document.querySelector('#registerBtn');
+    
+    try {
+        await navigator.clipboard.writeText(elements.passwordInput.value);
+        showNotification('Password copied to clipboard!', 'success');
         
-        if (loginBtn) {
-            loginBtn.addEventListener('click', () => this.showAuthModal('login'));
-        }
-        
-        if (registerBtn) {
-            registerBtn.addEventListener('click', () => this.showAuthModal('register'));
-        }
-
-        // Auth form submissions
-        document.addEventListener('submit', async (e) => {
-            if (e.target.matches('.auth-form')) {
-                e.preventDefault();
-                await this.handleAuthSubmission(e.target);
-            }
-        });
-
-        // Modal close buttons
-        document.addEventListener('click', (e) => {
-            if (e.target.matches('.close-btn') || e.target.matches('.auth-modal')) {
-                this.closeModal('auth');
-            }
-        });
-    }
-
-    showAuthModal(type = 'login') {
-        let modal = this.modals.get('auth');
-        
-        if (!modal) {
-            modal = this.createAuthModal();
-            this.modals.set('auth', modal);
-        }
-
-        // Update modal for login/register
-        const title = modal.querySelector('.auth-title');
-        const submitBtn = modal.querySelector('.auth-submit');
-        const switchText = modal.querySelector('.auth-switch');
-        
-        if (type === 'login') {
-            title.textContent = '🔐 Secure Login';
-            submitBtn.textContent = 'Login';
-            switchText.innerHTML = `Don't have an account? <a href="#" class="auth-link" data-switch="register">Register here</a>`;
-        } else {
-            title.textContent = '🛡️ Create Account';
-            submitBtn.textContent = 'Register';
-            switchText.innerHTML = `Already have an account? <a href="#" class="auth-link" data-switch="login">Login here</a>`;
-        }
-
-        modal.querySelector('form').setAttribute('data-type', type);
-        modal.classList.add('show');
-        
-        // Focus username input
+        // Security: Clear clipboard after 30 seconds
         setTimeout(() => {
-            const usernameInput = modal.querySelector('input[name="username"]');
-            if (usernameInput) usernameInput.focus();
-        }, 300);
-
-        // Handle auth switch links
-        const switchLink = modal.querySelector('.auth-link');
-        if (switchLink) {
-            switchLink.addEventListener('click', (e) => {
-                e.preventDefault();
-                const switchType = e.target.getAttribute('data-switch');
-                this.showAuthModal(switchType);
-            });
-        }
+            navigator.clipboard.writeText('').catch(() => {});
+        }, 30000);
+    } catch (error) {
+        console.error('Clipboard error:', error);
+        showNotification('Failed to copy password', 'error');
     }
+}
 
-    createAuthModal() {
-        const modal = document.createElement('div');
-        modal.className = 'auth-modal';
-        modal.innerHTML = `
-            <div class="auth-card">
-                <button class="close-btn" type="button">×</button>
-                <h2 class="auth-title">🔐 Secure Login</h2>
-                <div class="security-auth-notice">
-                    🔒 Your credentials are encrypted and never stored in plain text
-                </div>
-                <form class="auth-form" data-type="login">
-                    <input type="text" name="username" placeholder="Username" class="auth-input" required autocomplete="username">
-                    <input type="password" name="password" placeholder="Master Password" class="auth-input" required autocomplete="current-password">
-                    <div class="password-requirements">
-                        Master password should be strong and unique
-                    </div>
-                    <button type="submit" class="auth-submit">Login</button>
-                </form>
-                <div class="auth-switch">
-                    Don't have an account? <a href="#" class="auth-link" data-switch="register">Register here</a>
-                </div>
-                <div class="auth-security-info">
-                    <h4>🛡️ Security Features:</h4>
-                    <ul>
-                        <li>AES-256 encryption</li>
-                        <li>PBKDF2 key derivation</li>
-                        <li>Zero-knowledge architecture</li>
-                        <li>Secure session management</li>
-                    </ul>
-                </div>
+function clearPasswordInput() {
+    if (elements.passwordInput) {
+        elements.passwordInput.value = '';
+        analyzePassword('');
+        elements.passwordInput.focus();
+        showNotification('Password cleared', 'info');
+    }
+}
+
+function generateAndAnalyzePassword() {
+    const password = generateRandomPassword();
+    if (elements.passwordInput) {
+        elements.passwordInput.value = password;
+        analyzePassword(password);
+        showNotification('Secure password generated!', 'success');
+    }
+}
+
+function toggleAnalysis() {
+    analysisEnabled = !analysisEnabled;
+    
+    if (elements.pauseBtn) {
+        elements.pauseBtn.textContent = analysisEnabled ? '⏸️' : '▶️';
+        elements.pauseBtn.title = analysisEnabled ? 'Pause analysis' : 'Resume analysis';
+    }
+    
+    if (!analysisEnabled) {
+        hideAnalysisSection();
+    } else {
+        analyzePassword(elements.passwordInput?.value || '');
+    }
+    
+    showNotification(`Analysis ${analysisEnabled ? 'resumed' : 'paused'}`, 'info');
+}
+
+// ===== PASSWORD GENERATOR =====
+function updateLengthDisplay(length) {
+    if (elements.lengthValue) {
+        elements.lengthValue.textContent = length;
+    }
+    passwordGeneratorSettings.length = length;
+}
+
+function updatePasswordGeneratorSettings() {
+    passwordGeneratorSettings = {
+        length: parseInt(elements.lengthSlider?.value || 16),
+        includeUpper: elements.includeUpper?.checked ?? true,
+        includeLower: elements.includeLower?.checked ?? true,
+        includeNumbers: elements.includeNumbers?.checked ?? true,
+        includeSymbols: elements.includeSymbols?.checked ?? true,
+        excludeAmbiguous: elements.excludeAmbiguous?.checked ?? false
+    };
+    
+    // Ensure at least one character type is selected
+    if (!passwordGeneratorSettings.includeUpper && !passwordGeneratorSettings.includeLower && 
+        !passwordGeneratorSettings.includeNumbers && !passwordGeneratorSettings.includeSymbols) {
+        passwordGeneratorSettings.includeLower = true;
+        if (elements.includeLower) elements.includeLower.checked = true;
+        showNotification('At least one character type must be selected', 'warning');
+    }
+}
+
+function generateNewPassword() {
+    if (elements.generateBtn) {
+        const originalText = elements.generateBtn.textContent;
+        elements.generateBtn.textContent = 'Generating...';
+        elements.generateBtn.disabled = true;
+        
+        setTimeout(() => {
+            const password = generateRandomPassword();
+            if (elements.generatedPassword) {
+                elements.generatedPassword.value = password;
+            }
+            
+            elements.generateBtn.textContent = originalText;
+            elements.generateBtn.disabled = false;
+            showNotification('Cryptographically secure password generated!', 'success');
+        }, 500);
+    }
+}
+
+function generateRandomPassword() {
+    updatePasswordGeneratorSettings();
+    
+    let charset = '';
+    if (passwordGeneratorSettings.includeUpper) charset += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    if (passwordGeneratorSettings.includeLower) charset += 'abcdefghijklmnopqrstuvwxyz';
+    if (passwordGeneratorSettings.includeNumbers) charset += '0123456789';
+    if (passwordGeneratorSettings.includeSymbols) charset += '!@#$%^&*()_+-=[]{}|;:,.<>?';
+    
+    if (passwordGeneratorSettings.excludeAmbiguous) {
+        charset = charset.replace(/[0O1lI]/g, '');
+    }
+    
+    if (!charset) {
+        charset = 'abcdefghijklmnopqrstuvwxyz';
+        showNotification('Using default character set', 'warning');
+    }
+    
+    // Generate secure random password
+    const array = new Uint8Array(passwordGeneratorSettings.length);
+    crypto.getRandomValues(array);
+    
+    let password = '';
+    for (let i = 0; i < passwordGeneratorSettings.length; i++) {
+        password += charset.charAt(array[i] % charset.length);
+    }
+    
+    return password;
+}
+
+async function copyGeneratedPassword() {
+    if (!elements.generatedPassword?.value) {
+        showNotification('No generated password to copy', 'warning');
+        return;
+    }
+    
+    try {
+        await navigator.clipboard.writeText(elements.generatedPassword.value);
+        showNotification('Generated password copied!', 'success');
+    } catch (error) {
+        showNotification('Failed to copy password', 'error');
+    }
+}
+
+function useGeneratedPassword() {
+    if (elements.generatedPassword?.value && elements.passwordInput) {
+        elements.passwordInput.value = elements.generatedPassword.value;
+        analyzePassword(elements.generatedPassword.value);
+        showNotification('Password moved to analyzer!', 'success');
+    }
+}
+
+// ===== VAULT MANAGEMENT =====
+async function loadVaultData() {
+    try {
+        const response = await fetch('/api/vault');
+        const data = await response.json();
+        
+        if (data.success) {
+            vaultData = data.vault_entries;
+            updateVaultDisplay();
+            showNotification(`Loaded ${vaultData.length} encrypted passwords`, 'info');
+        } else {
+            throw new Error(data.message);
+        }
+    } catch (error) {
+        console.error('Failed to load vault:', error);
+        showNotification('Failed to load vault data', 'error');
+    }
+}
+
+function updateVaultDisplay() {
+    if (!elements.vaultList) return;
+    
+    let filteredData = [...vaultData];
+    
+    // Apply filters
+    if (vaultFilter) {
+        filteredData = filteredData.filter(item => 
+            item.title.toLowerCase().includes(vaultFilter) ||
+            item.site.toLowerCase().includes(vaultFilter) ||
+            item.username.toLowerCase().includes(vaultFilter)
+        );
+    }
+    
+    // Apply sorting
+    filteredData.sort((a, b) => {
+        switch (vaultSortBy) {
+            case 'title':
+                return a.title.localeCompare(b.title);
+            case 'site':
+                return a.site.localeCompare(b.site);
+            case 'category':
+                return (a.category || 'General').localeCompare(b.category || 'General');
+            case 'created_at':
+                return new Date(b.created_at) - new Date(a.created_at);
+            default:
+                return new Date(b.updated_at) - new Date(a.updated_at);
+        }
+    });
+    
+    if (filteredData.length === 0) {
+        elements.vaultList.innerHTML = `
+            <div class="empty-vault">
+                <div class="empty-vault-icon">🔐</div>
+                <h3>No passwords found</h3>
+                <p>Your secure vault is empty or no matches found.</p>
             </div>
         `;
-
-        document.body.appendChild(modal);
-        return modal;
+        return;
     }
-
-    async handleAuthSubmission(form) {
-        const type = form.getAttribute('data-type');
-        const formData = new FormData(form);
-        const username = formData.get('username').trim();
-        const password = formData.get('password');
-
-        if (!username || !password) {
-            showNotification('Please fill in all fields', 'error');
-            return;
-        }
-
-        if (password.length < 8) {
-            showNotification('Master password must be at least 8 characters', 'error');
-            return;
-        }
-
-        const submitBtn = form.querySelector('.auth-submit');
-        const originalText = submitBtn.textContent;
-        
-        try {
-            submitBtn.disabled = true;
-            submitBtn.textContent = type === 'login' ? 'Logging in...' : 'Creating account...';
-            submitBtn.classList.add('loading');
-
-            let result;
-            if (type === 'login') {
-                result = await api.login(username, password);
-            } else {
-                result = await api.register(username, password);
-                if (result.success) {
-                    // Auto-login after successful registration
-                    result = await api.login(username, password);
-                }
-            }
-
-            if (result.success) {
-                showNotification(`${type === 'login' ? 'Login' : 'Registration'} successful!`, 'success');
-                this.closeModal('auth');
-                await this.initializeAuthenticatedState();
-            } else {
-                throw new Error(result.error || `${type} failed`);
-            }
-        } catch (error) {
-            console.error(`${type} error:`, error);
-            showNotification(error.message || `${type} failed. Please try again.`, 'error');
-            
-            // Add error styling to form
-            form.classList.add('auth-error');
-            setTimeout(() => form.classList.remove('auth-error'), 500);
-        } finally {
-            submitBtn.disabled = false;
-            submitBtn.textContent = originalText;
-            submitBtn.classList.remove('loading');
-        }
-    }
-
-    async initializeAuthenticatedState() {
-        try {
-            // Load vault entries
-            await api.getVaultEntries();
-            
-            // Load user settings
-            await api.getSettings();
-            
-            // Load notifications
-            await api.getNotifications();
-            
-            // Update UI
-            this.updateAuthenticatedUI();
-            this.renderVaultEntries();
-            this.updateNotificationBadge();
-            
-            // Show welcome message
-            showNotification(`Welcome back, ${vaultState.currentUser}!`, 'success');
-            
-        } catch (error) {
-            console.error('Failed to initialize authenticated state:', error);
-            showNotification('Failed to load your data. Please refresh and try again.', 'error');
-        }
-    }
-
-    updateAuthenticatedUI() {
-        // Update header
-        const headerActions = document.querySelector('#headerActions');
-        if (headerActions) {
-            headerActions.innerHTML = `
-                <div class="welcome-text">Welcome, ${vaultState.currentUser}</div>
-                <button class="notification-btn" id="notificationBtn">
-                    🔔
-                    <span class="notification-badge" style="display: none;">0</span>
-                </button>
-                <button class="theme-toggle" title="Toggle theme">☀️</button>
-                <button class="auth-btn" id="settingsBtn">⚙️ Settings</button>
-                <button class="auth-btn" id="logoutBtn">🚪 Logout</button>
-            `;
-
-            // Reinitialize event listeners for new buttons
-            document.querySelector('#notificationBtn')?.addEventListener('click', () => this.showNotificationModal());
-            document.querySelector('#settingsBtn')?.addEventListener('click', () => this.showSettingsModal());
-            document.querySelector('#logoutBtn')?.addEventListener('click', () => this.handleLogout());
-            document.querySelector('.theme-toggle')?.addEventListener('click', () => this.toggleTheme());
-        }
-
-        // Show vault section
-        const vaultSection = document.querySelector('.vault-section');
-        if (vaultSection) {
-            vaultSection.style.display = 'block';
-        }
-
-        // Hide auth buttons from hero
-        const heroAuthBtns = document.querySelectorAll('.hero-section .auth-btn');
-        heroAuthBtns.forEach(btn => btn.style.display = 'none');
-    }
-
-    async handleLogout() {
-        if (confirm('Are you sure you want to logout?')) {
-            try {
-                await api.logout();
-                showNotification('Logged out successfully', 'info');
-            } catch (error) {
-                console.error('Logout error:', error);
-                showNotification('Logout completed', 'info');
-            }
-        }
-    }
-
-    initializeVaultControls() {
-        // Save vault entry
-        const saveBtn = document.querySelector('#saveEntry');
-        if (saveBtn) {
-            saveBtn.addEventListener('click', this.saveVaultEntry.bind(this));
-        }
-
-        // Search functionality
-        const searchInput = document.querySelector('#vaultSearch');
-        if (searchInput) {
-            searchInput.addEventListener('input', this.handleVaultSearch.bind(this));
-        }
-
-        // Sort functionality
-        const sortSelect = document.querySelector('#vaultSort');
-        if (sortSelect) {
-            sortSelect.addEventListener('change', this.handleVaultSort.bind(this));
-        }
-
-        // Vault form validation
-        const vaultForm = document.querySelector('#vaultForm');
-        if (vaultForm) {
-            vaultForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.saveVaultEntry();
-            });
-        }
-    }
-
-    handleVaultSearch(event) {
-        vaultState.searchTerm = event.target.value.toLowerCase();
-        this.renderVaultEntries();
-    }
-
-    handleVaultSort(event) {
-        const [sortBy, sortOrder] = event.target.value.split('-');
-        vaultState.sortBy = sortBy;
-        vaultState.sortOrder = sortOrder;
-        this.renderVaultEntries();
-    }
-
-    async saveVaultEntry() {
-        const siteName = document.querySelector('#siteName')?.value?.trim();
-        const siteUrl = document.querySelector('#siteUrl')?.value?.trim();
-        const username = document.querySelector('#vaultUsername')?.value?.trim();
-        const password = document.querySelector('#password')?.value;
-        const notes = document.querySelector('#notes')?.value?.trim();
-
-        if (!siteName || !username || !password) {
-            showNotification('Please fill in required fields (Site Name, Username, Password)', 'warning');
-            return;
-        }
-
-        // Validate URL if provided
-        if (siteUrl && !this.isValidURL(siteUrl)) {
-            showNotification('Please enter a valid URL', 'warning');
-            return;
-        }
-
-        // Analyze password strength
-        const analysis = passwordAnalyzer.analyzePassword(password);
-        
-        if (analysis.score < 30) {
-            const proceed = confirm('This password is weak. Are you sure you want to save it?');
-            if (!proceed) return;
-        }
-
-        const saveBtn = document.querySelector('#saveEntry');
-        const originalText = saveBtn ? saveBtn.textContent : 'Save';
-        
-        try {
-            if (saveBtn) {
-                saveBtn.disabled = true;
-                saveBtn.textContent = 'Saving...';
-                saveBtn.classList.add('loading');
-            }
-
-            const entry = {
-                site_name: siteName,
-                site_url: siteUrl || '',
-                username: username,
-                password: password,
-                notes: notes || '',
-                strength_score: analysis.score
-            };
-
-            const result = await api.saveVaultEntry(entry);
-            
-            if (result.success) {
-                showNotification('Entry saved successfully!', 'success');
-                this.clearVaultForm();
-                this.renderVaultEntries();
-                
-                // Check for breach alerts if enabled
-                if (vaultState.settings.breachAlerts && analysis.characteristics.isPotentiallyBreached) {
-                    this.addNotification({
-                        type: 'warning',
-                        title: 'Potentially Compromised Password',
-                        message: `The password for ${siteName} may have been in data breaches. Consider changing it.`,
-                        priority: 'high'
-                    });
-                }
-            } else {
-                throw new Error(result.error || 'Failed to save entry');
-            }
-        } catch (error) {
-            console.error('Save entry error:', error);
-            showNotification(error.message || 'Failed to save entry. Please try again.', 'error');
-        } finally {
-            if (saveBtn) {
-                saveBtn.disabled = false;
-                saveBtn.textContent = originalText;
-                saveBtn.classList.remove('loading');
-            }
-        }
-    }
-
-    isValidURL(string) {
-        try {
-            const url = new URL(string.startsWith('http') ? string : `https://${string}`);
-            return ['http:', 'https:'].includes(url.protocol);
-        } catch {
-            return false;
-        }
-    }
-
-    clearVaultForm() {
-        const inputs = ['#siteName', '#siteUrl', '#vaultUsername', '#password', '#notes'];
-        inputs.forEach(selector => {
-            const input = document.querySelector(selector);
-            if (input) input.value = '';
-        });
-        
-        this.hideStrengthIndicator();
-    }
-
-    renderVaultEntries() {
-        const vaultList = document.querySelector('#vaultList');
-        if (!vaultList) return;
-
-        let entries = [...vaultState.vaultEntries];
-        
-        // Apply search filter
-        if (vaultState.searchTerm) {
-            entries = entries.filter(entry => 
-                entry.site_name.toLowerCase().includes(vaultState.searchTerm) ||
-                entry.username.toLowerCase().includes(vaultState.searchTerm) ||
-                (entry.site_url && entry.site_url.toLowerCase().includes(vaultState.searchTerm))
-            );
-        }
-
-        // Apply sorting
-        entries.sort((a, b) => {
-            let aVal, bVal;
-            
-            switch (vaultState.sortBy) {
-                case 'name':
-                    aVal = a.site_name.toLowerCase();
-                    bVal = b.site_name.toLowerCase();
-                    break;
-                case 'date':
-                    aVal = new Date(a.created_at || 0);
-                    bVal = new Date(b.created_at || 0);
-                    break;
-                case 'strength':
-                    aVal = a.strength_score || 0;
-                    bVal = b.strength_score || 0;
-                    break;
-                case 'username':
-                    aVal = a.username.toLowerCase();
-                    bVal = b.username.toLowerCase();
-                    break;
-                default:
-                    aVal = a.site_name.toLowerCase();
-                    bVal = b.site_name.toLowerCase();
-            }
-            
-            if (aVal < bVal) return vaultState.sortOrder === 'asc' ? -1 : 1;
-            if (aVal > bVal) return vaultState.sortOrder === 'asc' ? 1 : -1;
-            return 0;
-        });
-
-        // Render entries
-        if (entries.length === 0) {
-            vaultList.innerHTML = this.getEmptyVaultHTML();
-        } else {
-            vaultList.innerHTML = entries.map(entry => this.createVaultEntryHTML(entry)).join('');
-            
-            // Add event listeners for vault actions
-            this.attachVaultEventListeners();
-        }
-
-        // Update vault stats
-        this.updateVaultStats(entries);
-    }
-
-    createVaultEntryHTML(entry) {
-        const createdDate = entry.created_at ? this.formatDate(entry.created_at) : 'Unknown';
-        const updatedDate = entry.updated_at ? this.formatDate(entry.updated_at) : null;
-        const strengthClass = this.getStrengthClass(entry.strength_score || 0);
-        const strengthText = this.getStrengthText(entry.strength_score || 0);
-        
-        return `
-            <li class="vault-item" data-entry-id="${entry.id}">
-                <div class="site-header">
-                    <h4 class="site-name">${this.escapeHTML(entry.site_name)}</h4>
-                    <div class="vault-meta">
-                        <div class="created-date">Created: ${createdDate}</div>
-                        ${updatedDate ? `<div class="updated-badge">Updated: ${updatedDate}</div>` : ''}
-                    </div>
-                </div>
-                
-                ${entry.site_url ? `<div class="site-url">🌐 ${this.escapeHTML(entry.site_url)}</div>` : ''}
-                
-                <div class="username-display">👤 ${this.escapeHTML(entry.username)}</div>
-                
-                <div class="password-preview">🔒 ${'•'.repeat(Math.min(entry.password_length || 8, 20))}</div>
-                
-                <div class="security-metrics">
-                    <span class="strength-badge strength-${strengthClass}">${strengthText}</span>
-                    ${entry.strength_score < 30 ? '<span class="breach-badge">⚠️ Weak</span>' : ''}
-                </div>
-                
-                ${entry.notes ? `<div class="entry-notes">📝 ${this.escapeHTML(entry.notes)}</div>` : ''}
-                
+    
+    elements.vaultList.innerHTML = filteredData.map(item => `
+        <div class="vault-item" data-id="${item.id}">
+            <div class="vault-header">
+                <div class="vault-title">${escapeHtml(item.title || item.site)}</div>
                 <div class="vault-actions">
-                    <button class="vault-btn copy-btn" data-action="copy" data-entry-id="${entry.id}">
-                        📋 Copy
+                    ${item.favorite ? '<span class="favorite-star">⭐</span>' : ''}
+                    <button onclick="toggleFavorite(${item.id})" class="vault-btn favorite-btn" title="Toggle favorite">
+                        ${item.favorite ? '⭐' : '☆'}
                     </button>
-                    <button class="vault-btn view-btn" data-action="view">
-                        👁️ View
+                    <button onclick="copyVaultPassword(${item.id})" class="vault-btn copy-btn" title="Copy password">
+                        📋
                     </button>
-                    <button class="vault-btn delete-btn" data-action="delete">
-                        🗑️ Delete
+                    <button onclick="viewVaultPassword(${item.id})" class="vault-btn view-btn" title="View password">
+                        👁️
+                    </button>
+                    <button onclick="deleteVaultPassword(${item.id})" class="vault-btn delete-btn" title="Delete password">
+                        🗑️
                     </button>
                 </div>
-            </li>
-        `;
-    }
+            </div>
+            <div class="vault-details">
+                <div class="vault-site">🌐 ${escapeHtml(item.site)}</div>
+                <div class="vault-username">👤 ${escapeHtml(item.username)}</div>
+                <div class="vault-category">📁 ${escapeHtml(item.category || 'General')}</div>
+                ${item.notes ? `<div class="vault-notes">📝 ${escapeHtml(item.notes)}</div>` : ''}
+            </div>
+            <div class="vault-meta">
+                <div class="vault-dates">
+                    <span class="created-date">Created: ${item.created_at}</span>
+                    ${item.updated_at !== item.created_at ? `<span class="updated-date">Updated: ${item.updated_at}</span>` : ''}
+                    ${item.last_accessed ? `<span class="accessed-date">Last accessed: ${item.last_accessed}</span>` : ''}
+                </div>
+                <div class="vault-security">
+                    <span class="strength-indicator strength-${getStrengthClass(item.password_strength)}">
+                        Strength: ${getStrengthLabel(item.password_strength)}%
+                    </span>
+                    ${item.breach_detected ? '<span class="breach-warning">⚠️ Breach detected</span>' : ''}
+                    ${item.access_count ? `<span class="access-count">Accessed ${item.access_count} times</span>` : ''}
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
 
-    attachVaultEventListeners() {
-        document.querySelectorAll('.vault-btn').forEach(btn => {
-            btn.addEventListener('click', this.handleVaultAction.bind(this));
+function getStrengthClass(strength) {
+    if (strength >= 80) return 'strong';
+    if (strength >= 60) return 'good';
+    if (strength >= 40) return 'medium';
+    return 'weak';
+}
+
+function getStrengthLabel(strength) {
+    return strength || 0;
+}
+
+function filterVaultEntries(searchTerm) {
+    vaultFilter = searchTerm.toLowerCase();
+    updateVaultDisplay();
+}
+
+function sortVaultEntries(sortBy) {
+    vaultSortBy = sortBy;
+    updateVaultDisplay();
+}
+
+function filterByCategory() {
+    const category = elements.categoryFilter?.value;
+    if (category && category !== 'all') {
+        vaultData = vaultData.filter(item => (item.category || 'General') === category);
+    }
+    updateVaultDisplay();
+}
+
+function filterByFavorites() {
+    const showFavoritesOnly = elements.favoritesFilter?.checked;
+    if (showFavoritesOnly) {
+        vaultData = vaultData.filter(item => item.favorite);
+    }
+    updateVaultDisplay();
+}
+
+async function savePassword() {
+    const title = elements.vaultTitle?.value.trim();
+    const site = elements.siteName?.value.trim();
+    const username = elements.vaultUsername?.value.trim();
+    const password = elements.vaultPassword?.value;
+    const category = elements.vaultCategory?.value || 'General';
+    const notes = elements.vaultNotes?.value.trim();
+    const tags = elements.vaultTags?.value.trim();
+    
+    if (!title || !site || !username || !password) {
+        showNotification('Please fill in all required fields', 'error');
+        return;
+    }
+    
+    const masterPassword = await getMasterPassword();
+    if (!masterPassword) return;
+    
+    try {
+        const response = await fetch('/api/vault', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                title,
+                site,
+                username,
+                password,
+                category,
+                notes,
+                tags,
+                master_password: masterPassword
+            })
         });
-    }
-
-    async handleVaultAction(event) {
-        const action = event.target.getAttribute('data-action');
-        const entryElement = event.target.closest('.vault-item');
-        const entryId = entryElement?.getAttribute('data-entry-id');
         
-        if (!entryId) return;
-
-        const entry = vaultState.vaultEntries.find(e => e.id.toString() === entryId);
-        if (!entry) return;
-
-        switch (action) {
-            case 'copy':
-                await this.copyVaultPassword(entryId);
-                break;
-            case 'view':
-                this.showPasswordModal(entry);
-                break;
-            case 'delete':
-                await this.deleteVaultEntry(entryId, entry.site_name);
-                break;
-        }
-    }
-
-    async copyVaultPassword(entryId) {
-        try {
-            const masterPassword = prompt('Enter your master password to decrypt:');
-            if (!masterPassword) return;
-
-            const response = await api.request(`/api/vault/${entryId}/decrypt`, {
-                method: 'POST',
-                body: { master_password: masterPassword }
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification(data.message, 'success');
+            
+            // Clear form
+            [elements.vaultTitle, elements.siteName, elements.vaultUsername, 
+             elements.vaultPassword, elements.vaultNotes, elements.vaultTags].forEach(el => {
+                if (el) el.value = '';
             });
-
-            if (response.success) {
-                await navigator.clipboard.writeText(response.password);
-                showNotification('Password copied to clipboard', 'success');
-                
-                // Clear clipboard after 45 seconds for security
-                setTimeout(async () => {
-                    try {
-                        await navigator.clipboard.writeText('');
-                    } catch (error) {
-                        // Ignore clipboard clear errors
-                    }
-                }, 45000);
-            }
-        } catch (error) {
-            showNotification('Failed to copy password. Check your master password.', 'error');
+            if (elements.vaultCategory) elements.vaultCategory.value = 'General';
+            
+            await loadVaultData();
+        } else {
+            showNotification(data.message, 'error');
         }
+    } catch (error) {
+        console.error('Save password error:', error);
+        showNotification('Failed to save password', 'error');
     }
+}
 
-    showPasswordModal(entry) {
-        let modal = this.modals.get('password');
+async function copyVaultPassword(id) {
+    const masterPassword = await getMasterPassword();
+    if (!masterPassword) return;
+    
+    try {
+        const response = await fetch(`/api/vault/${id}/password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ master_password: masterPassword })
+        });
         
-        if (!modal) {
-            modal = this.createPasswordModal();
-            this.modals.set('password', modal);
+        const data = await response.json();
+        
+        if (data.success) {
+            await navigator.clipboard.writeText(data.password);
+            showNotification('Password copied securely!', 'success');
+            
+            // Security: Clear clipboard after 30 seconds
+            setTimeout(() => {
+                navigator.clipboard.writeText('').catch(() => {});
+            }, 30000);
+            
+            await loadVaultData(); // Refresh to update access count
+        } else {
+            showNotification(data.message, 'error');
         }
-
-        // Update modal content
-        modal.querySelector('.modal-site-name').textContent = entry.site_name;
-        modal.querySelector('.modal-username').textContent = entry.username;
-        modal.querySelector('.modal-site-url').textContent = entry.site_url || 'No URL provided';
-        modal.querySelector('.modal-notes').textContent = entry.notes || 'No notes';
-        modal.querySelector('.modal-created').textContent = this.formatDate(entry.created_at);
-        
-        // Update security metrics
-        modal.querySelector('.modal-strength').textContent = this.getStrengthText(entry.strength_score || 0);
-        modal.querySelector('.modal-length').textContent = `${entry.password_length || 0} characters`;
-
-        modal.classList.add('show');
-        
-        // Auto-close after 30 seconds for security
-        setTimeout(() => {
-            if (modal.classList.contains('show')) {
-                modal.classList.remove('show');
-            }
-        }, 30000);
+    } catch (error) {
+        console.error('Copy password error:', error);
+        showNotification('Failed to copy password', 'error');
     }
+}
 
-    createPasswordModal() {
-        const modal = document.createElement('div');
-        modal.className = 'password-modal';
-        modal.innerHTML = `
-            <div class="password-modal-content">
-                <div class="modal-header">
-                    <h3>🔐 Password Details</h3>
-                    <button class="close-modal-btn" type="button">×</button>
-                </div>
-                
+async function viewVaultPassword(id) {
+    const masterPassword = await getMasterPassword();
+    if (!masterPassword) return;
+    
+    try {
+        const response = await fetch(`/api/vault/${id}/password`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ master_password: masterPassword })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const item = vaultData.find(i => i.id === id);
+            showPasswordModal(item, data.password);
+            await loadVaultData(); // Refresh to update access count
+        } else {
+            showNotification(data.message, 'error');
+        }
+    } catch (error) {
+        console.error('View password error:', error);
+        showNotification('Failed to decrypt password', 'error');
+    }
+}
+
+async function deleteVaultPassword(id) {
+    const item = vaultData.find(i => i.id === id);
+    if (!item) return;
+    
+    if (!confirm(`⚠️ Delete password for "${item.title || item.site}"?\n\nThis action cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/vault/${id}`, { method: 'DELETE' });
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification(data.message, 'success');
+            await loadVaultData();
+        } else {
+            showNotification(data.message, 'error');
+        }
+    } catch (error) {
+        console.error('Delete password error:', error);
+        showNotification('Failed to delete password', 'error');
+    }
+}
+
+async function toggleFavorite(id) {
+    try {
+        const response = await fetch(`/api/vault/${id}/favorite`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification(data.message, 'success');
+            await loadVaultData();
+        } else {
+            showNotification(data.message, 'error');
+        }
+    } catch (error) {
+        console.error('Toggle favorite error:', error);
+        showNotification('Failed to update favorite', 'error');
+    }
+}
+
+async function getMasterPassword() {
+    if (masterPasswordCache) {
+        return masterPasswordCache;
+    }
+    
+    const password = prompt('🔐 Enter your master password to access vault:');
+    if (!password) {
+        showNotification('Master password required', 'warning');
+        return null;
+    }
+    
+    // Cache for 5 minutes
+    masterPasswordCache = password;
+    setTimeout(() => {
+        masterPasswordCache = null;
+        showNotification('Master password session expired', 'info');
+    }, 5 * 60 * 1000);
+    
+    return password;
+}
+
+function showPasswordModal(item, password) {
+    const modal = document.createElement('div');
+    modal.className = 'password-modal-overlay';
+    modal.innerHTML = `
+        <div class="password-modal">
+            <div class="modal-header">
+                <h3>🔓 ${escapeHtml(item.title || item.site)}</h3>
+                <button class="close-btn" onclick="this.closest('.password-modal-overlay').remove()">×</button>
+            </div>
+            <div class="modal-content">
                 <div class="password-field">
-                    <label>Site Name:</label>
-                    <div class="field-value modal-site-name"></div>
+                    <label>Site:</label>
+                    <span>${escapeHtml(item.site)}</span>
                 </div>
-                
                 <div class="password-field">
                     <label>Username:</label>
-                    <div class="field-value modal-username"></div>
+                    <span>${escapeHtml(item.username)}</span>
                 </div>
-                
                 <div class="password-field">
-                    <label>URL:</label>
-                    <div class="field-value modal-site-url"></div>
-                </div>
-                
-                <div class="password-stats">
-                    <div class="stat">
-                        <strong>Strength:</strong>
-                        <span class="modal-strength"></span>
-                    </div>
-                    <div class="stat">
-                        <strong>Length:</strong>
-                        <span class="modal-length"></span>
+                    <label>Password:</label>
+                    <div class="password-reveal">
+                        <span class="password-text" style="font-family: monospace;">${escapeHtml(password)}</span>
+                        <button class="copy-btn" onclick="copyToClipboard('${password.replace(/'/g, "\\'")}')">📋</button>
                     </div>
                 </div>
-                
+                ${item.notes ? `
                 <div class="password-field">
                     <label>Notes:</label>
-                    <div class="field-value modal-notes"></div>
+                    <span>${escapeHtml(item.notes)}</span>
                 </div>
-                
-                <div class="password-field">
-                    <label>Created:</label>
-                    <div class="field-value modal-created"></div>
-                </div>
-                
-                <div class="security-timer">
-                    🔒 This window will auto-close in 30 seconds for security
-                </div>
-                
-                <div class="modal-actions">
-                    <button class="close-modal-btn secondary">Close</button>
+                ` : ''}
+                <div class="password-meta">
+                    <small>Created: ${item.created_at}</small>
+                    <small>Category: ${item.category || 'General'}</small>
+                    ${item.access_count ? `<small>Accessed: ${item.access_count} times</small>` : ''}
                 </div>
             </div>
-        `;
-
-        // Add event listeners
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal || e.target.matches('.close-modal-btn')) {
-                modal.classList.remove('show');
-            }
-        });
-
-        document.body.appendChild(modal);
-        return modal;
-    }
-
-    async deleteVaultEntry(entryId, siteName) {
-        if (!confirm(`Are you sure you want to delete the entry for "${siteName}"? This cannot be undone.`)) {
-            return;
+            <div class="modal-footer">
+                <button onclick="this.closest('.password-modal-overlay').remove()" class="btn-secondary">Close</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Auto-close after 15 seconds for security
+    setTimeout(() => {
+        if (modal.parentNode) {
+            modal.remove();
         }
-
-        try {
-            const result = await api.deleteVaultEntry(entryId);
-            
-            if (result.success) {
-                showNotification(`Deleted entry for ${siteName}`, 'success');
-                this.renderVaultEntries();
-            } else {
-                throw new Error(result.error || 'Failed to delete entry');
-            }
-        } catch (error) {
-            console.error('Delete entry error:', error);
-            showNotification(error.message || 'Failed to delete entry', 'error');
+    }, 15000);
+    
+    // Close on background click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
         }
+    });
+}
+
+async function copyToClipboard(text) {
+    try {
+        await navigator.clipboard.writeText(text);
+        showNotification('Copied to clipboard!', 'success');
+    } catch (error) {
+        showNotification('Failed to copy', 'error');
     }
+}
 
-    getEmptyVaultHTML() {
-        return `
-            <div class="empty-vault">
-                <div class="empty-vault-content">
-                    <h3>🔐 Your vault is empty</h3>
-                    <p>Add your first password entry using the form above.</p>
-                    <div class="security-reminder">
-                        💡 <strong>Tip:</strong> Use the password generator to create strong, unique passwords for each site.
-                    </div>
-                    <div class="security-features">
-                        <span class="feature">🔒 AES-256 Encrypted</span>
-                        <span class="feature">🛡️ Zero-Knowledge</span>
-                        <span class="feature">🔐 Secure Storage</span>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    updateVaultStats(entries) {
-        const statsContainer = document.querySelector('.vault-stats');
-        if (!statsContainer) return;
-
-        const totalEntries = entries.length;
-        const weakPasswords = entries.filter(e => (e.strength_score || 0) < 50).length;
-        const strongPasswords = entries.filter(e => (e.strength_score || 0) >= 70).length;
-        const avgStrength = totalEntries > 0 ? 
-            Math.round(entries.reduce((sum, e) => sum + (e.strength_score || 0), 0) / totalEntries) : 0;
-
-        statsContainer.innerHTML = `
-            <div class="stats-grid">
-                <div class="stat-item">
-                    <span class="stat-value">${totalEntries}</span>
-                    <span class="stat-label">Total Entries</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-value">${strongPasswords}</span>
-                    <span class="stat-label">Strong Passwords</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-value">${weakPasswords}</span>
-                    <span class="stat-label">Weak Passwords</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-value">${avgStrength}%</span>
-                    <span class="stat-label">Avg Strength</span>
-                </div>
-            </div>
-        `;
-    }
-
-    getStrengthClass(score) {
-        if (score >= 90) return 'fortress';
-        if (score >= 80) return 'military';
-        if (score >= 70) return 'strong';
-        if (score >= 50) return 'good';
-        if (score >= 30) return 'fair';
-        if (score >= 15) return 'weak';
-        return 'critical';
-    }
-
-    getStrengthText(score) {
-        const strengthClass = this.getStrengthClass(score);
-        return strengthClass.charAt(0).toUpperCase() + strengthClass.slice(1);
-    }
-
-    initializeSettingsModal() {
-        // Settings modal will be created when first opened
-    }
-
-    showSettingsModal() {
-        let modal = this.modals.get('settings');
+// ===== PHASE 1: NOTIFICATION SYSTEM =====
+async function loadUserNotifications() {
+    try {
+        const response = await fetch('/api/me');
+        const data = await response.json();
         
-        if (!modal) {
-            modal = this.createSettingsModal();
-            this.modals.set('settings', modal);
+        if (data.success && data.alerts) {
+            updateNotificationBadge(data.alerts.length);
+            if (data.alerts.length > 0) {
+                showNotification(`You have ${data.alerts.length} security alert${data.alerts.length > 1 ? 's' : ''}`, 'info');
+            }
         }
-
-        // Update current settings
-        this.updateSettingsValues(modal);
-        modal.classList.add('show');
+    } catch (error) {
+        console.error('Failed to load notifications:', error);
     }
+}
 
-    createSettingsModal() {
-        const modal = document.createElement('div');
-        modal.className = 'settings-modal';
-        modal.innerHTML = `
-            <div class="settings-modal-content">
-                <div class="modal-header">
-                    <h3>⚙️ Settings</h3>
-                    <button class="close-modal-btn" type="button">×</button>
+function updateNotificationBadge(count) {
+    if (!elements.notificationBadge) return;
+    
+    if (count > 0) {
+        elements.notificationBadge.textContent = count > 99 ? '99+' : count;
+        elements.notificationBadge.style.display = 'inline';
+        elements.notificationBadge.className = 'notification-badge active';
+    } else {
+        elements.notificationBadge.style.display = 'none';
+    }
+}
+
+function toggleNotifications() {
+    if (elements.notificationModal) {
+        const isVisible = elements.notificationModal.style.display === 'block';
+        elements.notificationModal.style.display = isVisible ? 'none' : 'block';
+        
+        if (!isVisible) {
+            loadNotificationContent();
+        }
+    }
+}
+
+async function loadNotificationContent() {
+    if (!elements.notificationsList) return;
+    
+    try {
+        const response = await fetch('/api/me');
+        const data = await response.json();
+        
+        if (data.success && data.alerts) {
+            if (data.alerts.length === 0) {
+                elements.notificationsList.innerHTML = `
+                    <div class="no-notifications">
+                        <div class="no-notifications-icon">🔔</div>
+                        <p>No active alerts</p>
+                        <small>Your security status is all clear!</small>
+                    </div>
+                `;
+            } else {
+                elements.notificationsList.innerHTML = data.alerts.map(alert => `
+                    <div class="notification-item ${alert.severity}">
+                        <div class="notification-header">
+                            <span class="notification-type">${getAlertIcon(alert.type)} ${alert.type.replace('_', ' ').toUpperCase()}</span>
+                            <span class="notification-time">${alert.created_at}</span>
+                        </div>
+                        <div class="notification-message">${escapeHtml(alert.message)}</div>
+                        <button class="acknowledge-btn" onclick="acknowledgeAlert(${alert.id})">
+                            Acknowledge
+                        </button>
+                    </div>
+                `).join('');
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load notifications:', error);
+        elements.notificationsList.innerHTML = '<div class="error">Failed to load notifications</div>';
+    }
+}
+
+function getAlertIcon(type) {
+    const icons = {
+        'breach': '🚨',
+        'weak_password': '🔓',
+        'old_password': '⏰',
+        'suspicious_activity': '🔍'
+    };
+    return icons[type] || '⚠️';
+}
+
+async function acknowledgeAlert(alertId) {
+    try {
+        const response = await fetch(`/api/alerts/${alertId}/acknowledge`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showNotification('Alert acknowledged', 'success');
+            loadNotificationContent();
+            loadUserNotifications(); // Refresh badge
+        } else {
+            showNotification(data.message, 'error');
+        }
+    } catch (error) {
+        console.error('Failed to acknowledge alert:', error);
+        showNotification('Failed to acknowledge alert', 'error');
+    }
+}
+
+// ===== PHASE 1: SETTINGS SYSTEM =====
+function toggleSettings() {
+    if (elements.settingsModal) {
+        const isVisible = elements.settingsModal.style.display === 'block';
+        elements.settingsModal.style.display = isVisible ? 'none' : 'block';
+        
+        if (!isVisible) {
+            loadSettingsContent();
+        }
+    }
+}
+
+async function loadSettingsContent() {
+    try {
+        const response = await fetch('/api/notifications/preferences');
+        const data = await response.json();
+        
+        if (data.success && elements.notificationSettings) {
+            const prefs = data.preferences;
+            elements.notificationSettings.innerHTML = `
+                <div class="settings-section">
+                    <h4>🔔 Notification Preferences</h4>
+                    <label class="setting-item">
+                        <input type="checkbox" id="breach-alerts" ${prefs.breach_alerts ? 'checked' : ''}>
+                        <span>Data breach alerts</span>
+                    </label>
+                    <label class="setting-item">
+                        <input type="checkbox" id="password-age-warnings" ${prefs.password_age_warnings ? 'checked' : ''}>
+                        <span>Password aging warnings</span>
+                    </label>
+                    <label class="setting-item">
+                        <input type="checkbox" id="suspicious-activity" ${prefs.suspicious_activity ? 'checked' : ''}>
+                        <span>Suspicious activity alerts</span>
+                    </label>
+                    <label class="setting-item">
+                        <input type="checkbox" id="email-notifications" ${prefs.email_notifications ? 'checked' : ''}>
+                        <span>Email notifications</span>
+                    </label>
+                    <label class="setting-item">
+                        <input type="checkbox" id="sms-notifications" ${prefs.sms_notifications ? 'checked' : ''}>
+                        <span>SMS notifications</span>
+                    </label>
                 </div>
                 
                 <div class="settings-section">
-                    <h4>🔔 Notifications</h4>
-                    <div class="settings-option">
-                        <div class="option-info">
-                            <div class="option-label">Password Age Warnings</div>
-                            <div class="option-description">Alert when passwords are older than 90 days</div>
-                        </div>
-                        <div class="settings-toggle" data-setting="passwordAgeWarnings"></div>
+                    <h4>📧 Contact Information</h4>
+                    <div class="setting-item">
+                        <label for="settings-email">Email:</label>
+                        <input type="email" id="settings-email" value="${data.email || ''}" placeholder="your@email.com">
                     </div>
-                    <div class="settings-option">
-                        <div class="option-info">
-                            <div class="option-label">Security Scanning</div>
-                            <div class="option-description">Automatically analyze passwords for security issues</div>
-                        </div>
-                        <div class="settings-toggle" data-setting="securityScanning"></div>
+                    <div class="setting-item">
+                        <label for="settings-phone">Phone:</label>
+                        <input type="tel" id="settings-phone" value="${data.phone || ''}" placeholder="+1234567890">
                     </div>
                 </div>
                 
-                <button class="save-settings-btn" type="button">💾 Save Settings</button>
-            </div>
-        `;
-
-        // Add event listeners
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal || e.target.matches('.close-modal-btn')) {
-                modal.classList.remove('show');
-            }
-            
-            if (e.target.matches('.settings-toggle')) {
-                this.toggleSetting(e.target);
-            }
-        });
-
-        modal.querySelector('.save-settings-btn').addEventListener('click', () => {
-            this.saveSettings(modal);
-        });
-
-        document.body.appendChild(modal);
-        return modal;
-    }
-
-    updateSettingsValues(modal) {
-        // Update toggles
-        modal.querySelectorAll('.settings-toggle').forEach(toggle => {
-            const setting = toggle.getAttribute('data-setting');
-            const isActive = vaultState.settings[setting];
-            toggle.classList.toggle('active', isActive);
-        });
-    }
-
-    toggleSetting(toggle) {
-        toggle.classList.toggle('active');
-    }
-
-    async saveSettings(modal) {
-        const saveBtn = modal.querySelector('.save-settings-btn');
-        const originalText = saveBtn.textContent;
-        
-        try {
-            saveBtn.disabled = true;
-            saveBtn.textContent = 'Saving...';
-
-            const settings = {};
-            
-            // Get toggle settings
-            modal.querySelectorAll('.settings-toggle').forEach(toggle => {
-                const setting = toggle.getAttribute('data-setting');
-                settings[setting] = toggle.classList.contains('active');
-            });
-
-            const result = await api.saveSettings(settings);
-            
-            if (result.success) {
-                showNotification('Settings saved successfully!', 'success');
-                modal.classList.remove('show');
-            } else {
-                throw new Error(result.error || 'Failed to save settings');
-            }
-        } catch (error) {
-            console.error('Save settings error:', error);
-            showNotification(error.message || 'Failed to save settings', 'error');
-        } finally {
-            saveBtn.disabled = false;
-            saveBtn.textContent = originalText;
-        }
-    }
-
-    showNotificationModal() {
-        let modal = this.modals.get('notifications');
-        
-        if (!modal) {
-            modal = this.createNotificationModal();
-            this.modals.set('notifications', modal);
-        }
-
-        this.updateNotificationsList(modal);
-        modal.classList.add('show');
-    }
-
-    createNotificationModal() {
-        const modal = document.createElement('div');
-        modal.className = 'notification-modal';
-        modal.innerHTML = `
-            <div class="notification-modal-content">
-                <div class="modal-header">
-                    <h3>🔔 Security Notifications</h3>
-                    <button class="close-modal-btn" type="button">×</button>
-                </div>
-                <div class="notifications-list" id="notificationsList">
-                    <!-- Notifications will be populated here -->
-                </div>
-            </div>
-        `;
-
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal || e.target.matches('.close-modal-btn')) {
-                modal.classList.remove('show');
-            }
-        });
-
-        document.body.appendChild(modal);
-        return modal;
-    }
-
-    updateNotificationsList(modal) {
-        const notificationsList = modal.querySelector('#notificationsList');
-        
-        if (vaultState.notifications.length === 0) {
-            notificationsList.innerHTML = `
-                <div class="no-notifications">
-                    <h3>✅ All Clear!</h3>
-                    <p>No security notifications at this time.</p>
+                <div class="settings-actions">
+                    <button onclick="saveSettings()" class="btn-primary">Save Settings</button>
+                    <button onclick="toggleSettings()" class="btn-secondary">Cancel</button>
                 </div>
             `;
-            return;
         }
+    } catch (error) {
+        console.error('Failed to load settings:', error);
+        if (elements.notificationSettings) {
+            elements.notificationSettings.innerHTML = '<div class="error">Failed to load settings</div>';
+        }
+    }
+}
 
-        notificationsList.innerHTML = vaultState.notifications
-            .map(notification => this.createNotificationHTML(notification))
-            .join('');
-            
-        // Add event listeners for acknowledge buttons
-        notificationsList.querySelectorAll('.acknowledge-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const notificationId = e.target.getAttribute('data-notification-id');
-                await this.acknowledgeNotification(notificationId);
-            });
+async function saveSettings() {
+    try {
+        const preferences = {
+            breach_alerts: document.getElementById('breach-alerts')?.checked || false,
+            password_age_warnings: document.getElementById('password-age-warnings')?.checked || false,
+            suspicious_activity: document.getElementById('suspicious-activity')?.checked || false,
+            email_notifications: document.getElementById('email-notifications')?.checked || false,
+            sms_notifications: document.getElementById('sms-notifications')?.checked || false,
+            email: document.getElementById('settings-email')?.value.trim() || '',
+            phone: document.getElementById('settings-phone')?.value.trim() || ''
+        };
+        
+        const response = await fetch('/api/notifications/preferences', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(preferences)
         });
-    }
-
-    createNotificationHTML(notification) {
-        const timeAgo = this.getTimeAgo(notification.created_at);
         
-        return `
-            <div class="notification-item ${notification.priority || 'medium'}" data-id="${notification.id}">
-                <div class="notification-header">
-                    <div class="notification-icon">${this.getNotificationIcon(notification.type)}</div>
-                    <div class="notification-content">
-                        <div class="notification-title">${notification.title}</div>
-                        <div class="notification-message">${notification.message}</div>
-                        <div class="notification-time">${timeAgo}</div>
-                    </div>
-                    <button class="acknowledge-btn" data-notification-id="${notification.id}" title="Acknowledge">✓</button>
-                </div>
-            </div>
-        `;
-    }
-
-    getNotificationIcon(type) {
-        const icons = {
-            breach: '🚨',
-            weak: '⚠️',
-            age: '📅',
-            security: '🔒',
-            info: 'ℹ️',
-            success: '✅'
-        };
-        return icons[type] || 'ℹ️';
-    }
-
-    async acknowledgeNotification(notificationId) {
-        try {
-            const result = await api.acknowledgeNotification(notificationId);
-            
-            if (result.success) {
-                // Remove from local state
-                vaultState.notifications = vaultState.notifications.filter(n => n.id !== notificationId);
-                
-                // Update UI
-                const notificationElement = document.querySelector(`[data-id="${notificationId}"]`);
-                if (notificationElement) {
-                    notificationElement.remove();
-                }
-                
-                this.updateNotificationBadge();
-                showNotification('Notification acknowledged', 'success');
-                
-                // Update modal if empty
-                const modal = this.modals.get('notifications');
-                if (modal && vaultState.notifications.length === 0) {
-                    this.updateNotificationsList(modal);
-                }
-            }
-        } catch (error) {
-            console.error('Acknowledge notification error:', error);
-            showNotification('Failed to acknowledge notification', 'error');
-        }
-    }
-
-    addNotification(notification) {
-        const newNotification = {
-            id: Date.now().toString(),
-            created_at: new Date().toISOString(),
-            acknowledged: false,
-            ...notification
-        };
+        const data = await response.json();
         
-        vaultState.notifications.unshift(newNotification);
-        this.updateNotificationBadge();
-        
-        // Show toast notification for high priority alerts
-        if (notification.priority === 'high' || notification.priority === 'critical') {
-            showNotification(notification.title, 'warning');
-        }
-    }
-
-    updateNotificationBadge() {
-        const badge = document.querySelector('.notification-badge');
-        if (!badge) return;
-
-        const count = vaultState.notifications.filter(n => !n.acknowledged).length;
-        
-        if (count > 0) {
-            badge.textContent = count > 99 ? '99+' : count.toString();
-            badge.style.display = 'flex';
+        if (data.success) {
+            showNotification('Settings saved successfully!', 'success');
+            toggleSettings();
         } else {
-            badge.style.display = 'none';
+            showNotification(data.message, 'error');
+        }
+    } catch (error) {
+        console.error('Failed to save settings:', error);
+        showNotification('Failed to save settings', 'error');
+    }
+}
+
+// ===== PAGE INITIALIZATION =====
+function initializeCurrentPage() {
+    const path = window.location.pathname;
+    
+    if (path.includes('generator') || document.getElementById('generatedPassword')) {
+        initializePasswordGenerator();
+    }
+    
+    if (path === '/' || document.getElementById('passwordInput')) {
+        initializePasswordAnalyzer();
+    }
+    
+    if (currentUserSalt && elements.vaultList) {
+        loadVaultData();
+    }
+}
+
+function initializePasswordGenerator() {
+    if (elements.lengthSlider && elements.lengthValue) {
+        updateLengthDisplay(parseInt(elements.lengthSlider.value));
+    }
+    
+    // Generate initial password
+    if (elements.generateBtn && elements.generatedPassword) {
+        setTimeout(() => generateNewPassword(), 500);
+    }
+}
+
+function initializePasswordAnalyzer() {
+    if (elements.passwordInput && elements.passwordInput.value) {
+        analyzePassword(elements.passwordInput.value);
+    }
+}
+
+// ===== UTILITY FUNCTIONS =====
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function handleKeyboardShortcuts(event) {
+    // Ctrl+G: Generate password
+    if (event.ctrlKey && event.key === 'g') {
+        event.preventDefault();
+        if (elements.passwordInput) {
+            generateAndAnalyzePassword();
+        } else if (elements.generateBtn) {
+            generateNewPassword();
         }
     }
-
-    initializeKeyboardShortcuts() {
-        document.addEventListener('keydown', (e) => {
-            // Ctrl/Cmd + G - Generate password
-            if ((e.ctrlKey || e.metaKey) && e.key === 'g') {
-                e.preventDefault();
-                this.quickGenerate();
-            }
-            
-            // Ctrl/Cmd + S - Save vault entry
-            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-                const vaultForm = document.querySelector('#vaultForm');
-                if (vaultForm && vaultState.isAuthenticated) {
-                    e.preventDefault();
-                    this.saveVaultEntry();
-                }
-            }
-            
-            // Escape - Close modals
-            if (e.key === 'Escape') {
-                this.closeAllModals();
-            }
-            
-            // Ctrl/Cmd + L - Logout
-            if ((e.ctrlKey || e.metaKey) && e.key === 'l' && vaultState.isAuthenticated) {
-                e.preventDefault();
-                this.handleLogout();
-            }
-        });
-    }
-
-    closeModal(modalName) {
-        const modal = this.modals.get(modalName);
-        if (modal) {
-            modal.classList.remove('show');
+    
+    // Ctrl+L: Open login modal
+    if (event.ctrlKey && event.key === 'l') {
+        event.preventDefault();
+        if (!currentUserSalt) {
+            openAuthModal();
         }
     }
-
-    closeAllModals() {
-        this.modals.forEach(modal => modal.classList.remove('show'));
-    }
-
-    // Utility methods
-    formatDate(dateString) {
-        if (!dateString) return 'Unknown';
+    
+    // Escape: Close modals
+    if (event.key === 'Escape') {
+        // Close any open modals
+        const modals = document.querySelectorAll('.modal-overlay, .password-modal-overlay');
+        modals.forEach(modal => modal.remove());
         
-        try {
-            const date = new Date(dateString);
-            const now = new Date();
-            const diffTime = Math.abs(now - date);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            if (diffDays === 1) return 'Today';
-            if (diffDays === 2) return 'Yesterday';
-            if (diffDays <= 7) return `${diffDays} days ago`;
-            
-            return date.toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        } catch (error) {
-            return 'Unknown';
+        if (elements.authModal) {
+            closeAuthModal();
         }
-    }
-
-    getTimeAgo(dateString) {
-        if (!dateString) return 'Unknown';
         
-        try {
-            const date = new Date(dateString);
-            const now = new Date();
-            const diffTime = Math.abs(now - date);
-            const diffMinutes = Math.floor(diffTime / (1000 * 60));
-            const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
-            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-            
-            if (diffMinutes < 1) return 'Just now';
-            if (diffMinutes < 60) return `${diffMinutes}m ago`;
-            if (diffHours < 24) return `${diffHours}h ago`;
-            if (diffDays < 30) return `${diffDays}d ago`;
-            
-            return date.toLocaleDateString();
-        } catch (error) {
-            return 'Unknown';
+        if (elements.notificationModal) {
+            elements.notificationModal.style.display = 'none';
+        }
+        
+        if (elements.settingsModal) {
+            elements.settingsModal.style.display = 'none';
         }
     }
+}
 
-    escapeHTML(str) {
-        if (!str) return '';
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
+function handleVisibilityChange() {
+    if (document.hidden) {
+        // Clear sensitive data when tab is hidden
+        setTimeout(() => {
+            if (masterPasswordCache) {
+                masterPasswordCache = null;
+                console.log('Master password cleared for security');
+            }
+        }, 30000); // 30 seconds
     }
 }
 
 // ===== NOTIFICATION SYSTEM =====
-function showNotification(message, type = 'info', duration = 5000) {
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
+function showNotification(message, type = 'info') {
+    // Remove existing notifications of same type
+    const existing = document.querySelectorAll(`.notification-toast.${type}`);
+    existing.forEach(n => n.remove());
     
-    // Add icon based on type
+    const notification = document.createElement('div');
+    notification.className = `notification-toast ${type}`;
+    
     const icons = {
         success: '✅',
         error: '❌',
@@ -2032,152 +1458,110 @@ function showNotification(message, type = 'info', duration = 5000) {
         info: 'ℹ️'
     };
     
-    notification.innerHTML = `${icons[type] || ''} ${message}`;
+    const colors = {
+        success: '#2ed573',
+        error: '#ff4757',
+        warning: '#ffa502',
+        info: '#3742fa'
+    };
     
-    document.body.appendChild(notification);
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${colors[type]};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 10000;
+        font-weight: 600;
+        font-size: 14px;
+        max-width: 350px;
+        animation: slideInRight 0.3s ease;
+        cursor: pointer;
+    `;
     
-    // Animate in
-    setTimeout(() => notification.style.transform = 'translateX(0)', 10);
-    
-    // Auto remove
-    setTimeout(() => {
-        notification.style.transform = 'translateX(100%)';
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 300);
-    }, duration);
+    notification.innerHTML = `${icons[type]} ${message}`;
     
     // Click to dismiss
     notification.addEventListener('click', () => {
-        notification.style.transform = 'translateX(100%)';
-        setTimeout(() => {
-            if (notification.parentNode) {
-                notification.parentNode.removeChild(notification);
-            }
-        }, 300);
+        notification.style.animation = 'slideOutRight 0.3s ease';
+        setTimeout(() => notification.remove(), 300);
     });
-}
-
-// ===== ENHANCED SECURITY CHECKS =====
-function performSecurityChecks() {
-    // Check if running on HTTPS
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-        showNotification('⚠️ VaultGuard should only be used over HTTPS for security', 'warning', 10000);
-    }
     
-    // Check browser security features
-    if (!window.crypto || !window.crypto.getRandomValues) {
-        showNotification('❌ Your browser lacks required security features', 'error', 10000);
-    }
+    document.body.appendChild(notification);
     
-    // Check for clipboard API
-    if (!navigator.clipboard) {
-        console.warn('Clipboard API not available, using fallback');
-    }
-}
-
-// ===== INITIALIZE APPLICATION =====
-const uiManager = new UIManager();
-
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('🔐 VaultGuard Enhanced - Phase 1 Loading...');
-    
-    // Initialize theme
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    document.documentElement.setAttribute('data-theme', savedTheme);
-    
-    // Update theme toggle icon
-    const themeToggle = document.querySelector('.theme-toggle');
-    if (themeToggle) {
-        themeToggle.innerHTML = savedTheme === 'light' ? '🌙' : '☀️';
-    }
-    
-    // Perform security checks
-    performSecurityChecks();
-    
-    // Initialize UI manager
-    uiManager.initializeEventListeners();
-    
-    // Try to restore session if user was logged in
-    try {
-        const sessionCheck = await api.request('/api/session-check').catch(() => null);
-        
-        if (sessionCheck && sessionCheck.authenticated) {
-            vaultState.isAuthenticated = true;
-            vaultState.currentUser = sessionCheck.username;
-            await uiManager.initializeAuthenticatedState();
-        }
-    } catch (error) {
-        console.log('No existing session found');
-    }
-    
-    // Initialize vault controls
-    const vaultControls = document.createElement('div');
-    vaultControls.className = 'vault-controls';
-    vaultControls.innerHTML = `
-        <div class="search-container">
-            <span class="search-icon">🔍</span>
-            <input type="text" id="vaultSearch" class="search-input" placeholder="Search your passwords..." autocomplete="off">
-        </div>
-        <div class="sort-container">
-            <label class="sort-label">Sort by:</label>
-            <select id="vaultSort" class="sort-select">
-                <option value="name-asc">Name (A-Z)</option>
-                <option value="name-desc">Name (Z-A)</option>
-                <option value="date-desc">Newest First</option>
-                <option value="date-asc">Oldest First</option>
-                <option value="strength-desc">Strongest First</option>
-                <option value="strength-asc">Weakest First</option>
-                <option value="username-asc">Username (A-Z)</option>
-                <option value="username-desc">Username (Z-A)</option>
-            </select>
-        </div>
-    `;
-    
-    // Insert vault controls before vault list
-    const vaultSection = document.querySelector('.vault-section');
-    const vaultList = document.querySelector('#vaultList');
-    if (vaultSection && vaultList) {
-        vaultSection.insertBefore(vaultControls, vaultList);
-        
-        // Add vault stats container
-        const statsContainer = document.createElement('div');
-        statsContainer.className = 'vault-stats';
-        vaultSection.insertBefore(statsContainer, vaultList);
-    }
-    
-    // Reinitialize vault controls
-    uiManager.initializeVaultControls();
-    
-    console.log('✅ VaultGuard Enhanced - Phase 1 Loaded Successfully!');
-    
-    // Show success notification
+    // Auto-dismiss
     setTimeout(() => {
-        showNotification('🔐 VaultGuard Enhanced Phase 1 Ready!', 'success');
-    }, 1000);
-});
+        if (notification.parentNode) {
+            notification.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => notification.remove(), 300);
+        }
+    }, 4000);
+}
 
-// ===== ERROR HANDLING =====
+// Add required CSS animations
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slideInRight {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+    @keyframes slideOutRight {
+        from { transform: translateX(0); opacity: 1; }
+        to { transform: translateX(100%); opacity: 0; }
+    }
+`;
+document.head.appendChild(style);
+
+// ===== GLOBAL ERROR HANDLING =====
 window.addEventListener('error', (event) => {
     console.error('Global error:', event.error);
-    showNotification('An unexpected error occurred. Please refresh the page.', 'error');
+    showNotification('An unexpected error occurred', 'error');
 });
 
 window.addEventListener('unhandledrejection', (event) => {
     console.error('Unhandled promise rejection:', event.reason);
-    showNotification('A network error occurred. Please check your connection.', 'error');
+    showNotification('Network error occurred', 'error');
+    event.preventDefault();
 });
 
-// ===== EXPORT FOR TESTING =====
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        VaultGuardState,
-        VaultGuardAPI,
-        PasswordAnalyzer,
-        PasswordGenerator,
-        UIManager,
-        showNotification
-    };
+// ===== SECURITY CLEANUP =====
+window.addEventListener('beforeunload', () => {
+    masterPasswordCache = null;
+    
+    // Clear any displayed passwords
+    const passwordFields = document.querySelectorAll('.password-text');
+    passwordFields.forEach(field => {
+        field.textContent = '••••••••••';
+    });
+    
+    // Clear clipboard
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText('').catch(() => {});
+    }
+});
+
+// ===== EXPOSE GLOBAL FUNCTIONS =====
+// Functions that need to be called from HTML onclick attributes
+window.copyVaultPassword = copyVaultPassword;
+window.viewVaultPassword = viewVaultPassword;
+window.deleteVaultPassword = deleteVaultPassword;
+window.toggleFavorite = toggleFavorite;
+window.acknowledgeAlert = acknowledgeAlert;
+window.copyToClipboard = copyToClipboard;
+window.saveSettings = saveSettings;
+
+// ===== MAIN INITIALIZATION =====
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initialize);
+} else {
+    initialize();
 }
+
+// Performance monitoring
+setTimeout(() => {
+    console.log('VaultGuard Performance Metrics:', performanceMetrics);
+}, 5000);
